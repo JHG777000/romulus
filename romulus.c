@@ -46,7 +46,7 @@ struct romulus_shader_s { romulus_display display ; romulus_attributes attribute
 
 struct romulus_camera_s { RKMath_NewVector(view_matrix, 16) ; RKMath_NewVector(pos, 3) ; float pitch ; float yaw ; float roll ; } ;
 
-struct romulus_geometry_s { romulus_display display ; romulus_attributes attributes ; RKList lights ; RKStore material_store ; } ;
+struct romulus_geometry_s { romulus_display display ; romulus_attributes attributes ; RKStore material_store ; } ;
 
 struct romulus_render_buffer_s { romulus_display display ; int fbuf ; } ;
 
@@ -169,21 +169,21 @@ static int romulus_build_shaders( romulus_shader shader, const char* vertex_sour
     
     glShaderSource(vertex_shader, 1, &vertex_source, NULL) ;
     
-    glCompileShader(vertex_shader);
+    glCompileShader(vertex_shader) ;
     
-    glGetShaderiv(vertex_shader, GL_INFO_LOG_LENGTH, &length_of_log);
+    glGetShaderiv(vertex_shader, GL_INFO_LOG_LENGTH, &length_of_log) ;
     
     if ( length_of_log > 0 ) {
         
         GLchar *log = RKMem_CArray(length_of_log, GLchar) ;
         
-        glGetShaderInfoLog(vertex_shader, length_of_log, &length_of_log, log);
+        glGetShaderInfoLog(vertex_shader, length_of_log, &length_of_log, log) ;
         
         IDKLog("romulus, vertex shader compile log: ", 0, 1) ;
         
-        IDKLog(log, 1, 1);
+        IDKLog(log, 1, 1) ;
         
-        free(log);
+        free(log) ;
     }
 
     
@@ -212,9 +212,9 @@ static int romulus_build_shaders( romulus_shader shader, const char* vertex_sour
         
         IDKLog("romulus, frag shader compile log: ", 0, 1) ;
         
-        IDKLog(log, 1, 1);
+        IDKLog(log, 1, 1) ;
         
-        free(log);
+        free(log) ;
     }
     
     glGetShaderiv(fragment_shader, GL_COMPILE_STATUS, &status) ;
@@ -223,7 +223,7 @@ static int romulus_build_shaders( romulus_shader shader, const char* vertex_sour
         
         IDKLog("romulus, failed to compile fragment shader", 1, 1) ;
         
-        return 0;
+        return 0 ;
     }
     
     GLuint romulus_shader_program = glCreateProgram() ;
