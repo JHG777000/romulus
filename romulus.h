@@ -11,7 +11,7 @@
 
 #include "IDK.h"
 
-typedef struct romulus_display_s* romulus_display ;
+typedef struct romulus_scene_s* romulus_scene ;
 
 typedef struct romulus_render_stage_s* romulus_render_stage ;
 
@@ -29,27 +29,61 @@ typedef struct romulus_entity_s* romulus_entity ;
 
 typedef struct romulus_camera_s* romulus_camera ;
 
-typedef void (*romulus_attributes)(unsigned int shader_id) ;
+typedef struct romulus_texture_s* romulus_texture ;
+
+typedef enum { romulus_byte_type_id, romulus_sbyte_type_id,
+    
+romulus_short_type_id, romulus_ushort_type_id,
+    
+romulus_int_type_id, romulus_uint_type_id,
+    
+romulus_float_type_id, romulus_double_type_id } romulus_data_type ;
+
+typedef enum { romulus_true = 1, romulus_false = 0 } romulus_bool ;
+
+typedef void (*romulus_attributes_binder)(romulus_shader shader) ;
+
+typedef void (*romulus_attributes_constructor)(int vertex_count, RKArgs args) ;
 
 typedef void (*romulus_init_material)(romulus_shader shader) ;
 
-typedef void (*romulus_deinit_material)(romulus_shader shader) ;
+typedef IDKWindow romulus_window ;
 
-romulus_display romulus_new_display( int window_width, int window_height, const char* window_title, float fov, float nearZ, float farZ, int vsync ) ;
+typedef JHGPixels_scene romulus_raw_texture ;
 
-void romulus_destroy_display( romulus_display display ) ;
+typedef IDKWindowRunLoopFuncType romulus_run_loop_func_type ;
+
+typedef IDKWindowQuitRunLoopFuncType romulus_run_quit_loop_func_type ;
+
+void romulus_report_error( const char* report_name ) ;
+
+romulus_window romulus_new_window( int win_width, int win_height, const char* win_title ) ;
+
+romulus_scene romulus_new_scene( romulus_window window, romulus_bool vsync ) ;
+
+void romulus_destroy_scene( romulus_scene scene ) ;
 
 void romulus_bind_texture_unit( unsigned int tunit ) ;
 
-void romulus_set_display_vsync( romulus_display display, int vsync ) ;
+void romulus_set_scene_vsync( romulus_scene scene, romulus_bool vsync ) ;
 
-int romulus_is_display_vsync( romulus_display display ) ;
+romulus_bool romulus_is_scene_vsync( romulus_scene scene ) ;
 
-void romulus_set_active_display( romulus_display display ) ;
+void romulus_set_cull_back_face( romulus_scene scene, romulus_bool cull ) ;
 
-void romulus_builtin_attributes_one( unsigned int shader_id ) ;
+void romulus_set_depth_test( romulus_scene scene, romulus_bool depth ) ;
 
-romulus_shader romulus_new_shader( romulus_display display, romulus_attributes attributes ) ;
+romulus_window romulus_get_window_from_scene( romulus_scene scene ) ;
+
+void romulus_set_active_scene( romulus_scene scene ) ;
+
+void romulus_attributes_zero( romulus_shader shader ) ;
+
+romulus_shader romulus_new_shader( romulus_scene scene, const char* vertex_shader, const char* fragment_shader, romulus_attributes_binder attributes ) ;
+
+void romulus_destroy_shader( romulus_shader shader ) ;
+
+void romulus_bind_attribute_location_to_shader( const char* attribute_name, unsigned int location, romulus_shader shader )  ;
 
 void romulus_load_transform_matrix_to_shader( RKMVector matrix, romulus_shader shader ) ;
 
@@ -57,7 +91,29 @@ void romulus_load_projection_matrix_to_shader( RKMVector matrix, romulus_shader 
 
 void romulus_load_view_matrix_to_shader( RKMVector matrix, romulus_shader shader ) ;
 
-void romulus_new_projection_matrix( RKMVector matrix, float fov, float aspect, float nearZ, float farZ ) ;
+romulus_texture romulus_new_texture( romulus_scene scene, const char* texture_name, unsigned int texture_unit, romulus_raw_texture raw_texture ) ;
+
+void romulus_destroy_texture( romulus_texture texture ) ;
+
+void romulus_load_texture_to_shader( romulus_texture texture, romulus_shader shader ) ;
+
+int romulus_get_texture_width( romulus_texture texture ) ;
+
+int romulus_get_texture_height( romulus_texture texture ) ;
+
+romulus_material romulus_new_material( romulus_shader shader, romulus_init_material init ) ;
+
+void romulus_destroy_material( romulus_material material ) ;
+
+int romulus_is_material_active( romulus_material material ) ;
+
+void romulus_set_material_active( romulus_material material, int is_active ) ;
+
+void romulus_add_mesh_to_material( romulus_mesh mesh, romulus_material material )  ;
+
+void romulus_new_perspective_matrix( RKMVector matrix, int width, int height, float fov, float nearZ, float farZ ) ;
+
+void romulus_new_ographic_matrix( RKMVector matrix, float left, float right, float bottom, float top, float nearZ, float farZ ) ;
 
 void romulus_new_transform_matrix( RKMVector matrix, RKMVector pos, RKMVector rot, float scale ) ;
 
@@ -71,11 +127,25 @@ void romulus_camera_get_pos( romulus_camera camera, RKMVector pos ) ;
 
 void romulus_camera_set_pos( romulus_camera camera, RKMVector pos ) ;
 
-romulus_mesh romulus_new_mesh( romulus_attributes attributes, RKMVector vertexes, int v_size, RKMVector indexes, int i_size, RKMVector texture_coords ) ;
+void romulus_camera_set_pitch( romulus_camera camera, float pitch ) ;
 
-static void romulus_destroy_entity_from_mesh( void* entity ) ;
+void romulus_camera_set_yaw( romulus_camera camera, float yaw ) ;
+
+void romulus_camera_set_roll( romulus_camera camera, float roll ) ;
+
+void romulus_update_camera( romulus_camera camera ) ;
+
+romulus_mesh romulus_new_mesh( romulus_scene scene, romulus_attributes_constructor attributes_constructor, RKArgs attribute_args, romulus_attributes_binder attributes,
+                              
+int vertex_count, unsigned int* indexes, int index_count ) ;
 
 void romulus_destroy_mesh( romulus_mesh mesh ) ;
+
+void romulus_construct_attribute( unsigned int index, void* data, romulus_data_type data_type, int num_of_data_per_element, int num_of_elements, romulus_bool is_normalized ) ;
+
+void romulus_enable_attribute_with_mesh( romulus_mesh mesh, unsigned int index ) ;
+
+void romulus_disable_attribute_with_mesh( romulus_mesh mesh, unsigned int index ) ;
 
 romulus_entity romulus_new_entity( romulus_mesh mesh, RKMVector pos, RKMVector rot, float scale ) ;
 
@@ -97,6 +167,32 @@ void romulus_add_to_entity_pos( romulus_entity entity, RKMVector vec ) ;
 
 void romulus_add_to_entity_rot( romulus_entity entity, RKMVector vec ) ;
 
+romulus_geometry romulus_new_geometry( void ) ;
+
+void romulus_destroy_geometry( romulus_geometry geometry ) ;
+
+void romulus_add_material_to_geometry( romulus_material material, romulus_geometry geometry ) ;
+
+romulus_render_buffer romulus_new_render_buffer( romulus_scene scene, int width, int height, RKMVector projection_matrix ) ;
+
+void romulus_destroy_render_buffer( romulus_render_buffer render_buffer ) ;
+
+void romulus_load_render_buffer_as_texture_to_shader( romulus_render_buffer render_buffer, const char* texture_name, unsigned int tunit, romulus_shader shader ) ;
+
+int romulus_get_render_buffer_width( romulus_render_buffer render_buffer ) ;
+
+int romulus_get_render_buffer_height( romulus_render_buffer render_buffer ) ;
+
+void romulus_set_render_buffer_projection_matrix( romulus_render_buffer render_buffer, RKMVector projection_matrix ) ;
+
+romulus_render_stage romulus_new_render_stage( romulus_camera camera, romulus_render_buffer render_buffer, romulus_geometry geometry ) ;
+
+void romulus_destroy_render_stage( romulus_render_stage stage ) ;
+
 void romulus_render( romulus_render_stage stage ) ;
+
+void romulus_present( romulus_render_stage stage ) ;
+
+void romulus_run_loop( romulus_scene scene, romulus_run_loop_func_type run_loop_func, romulus_run_quit_loop_func_type run_quit_loop_func ) ;
 
 #endif /* romulus_h */
