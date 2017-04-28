@@ -11,6 +11,12 @@
 
 #include "IDK.h"
 
+#include "romulus2d.h"
+
+typedef struct romulus_window_s* romulus_window ;
+
+typedef struct romulus_app_s* romulus_app ;
+
 typedef struct romulus_scene_s* romulus_scene ;
 
 typedef struct romulus_render_stage_s* romulus_render_stage ;
@@ -45,37 +51,41 @@ typedef void (*romulus_attributes_binder)(romulus_shader shader) ;
 
 typedef void (*romulus_attributes_constructor)(int vertex_count, RKArgs args) ;
 
-typedef void (*romulus_init_material)(romulus_shader shader) ;
-
-typedef IDKWindow romulus_window ;
-
-typedef JHGPixels_scene romulus_raw_texture ;
+typedef void (*romulus_init_material)(romulus_shader shader, RKArgs material_args) ;
 
 typedef IDKWindowRunLoopFuncType romulus_run_loop_func_type ;
 
 typedef IDKWindowQuitRunLoopFuncType romulus_run_quit_loop_func_type ;
 
-void romulus_report_error( const char* report_name ) ;
+void romulus_report_error( romulus_app app, const char* report_name ) ;
 
-romulus_window romulus_new_window( int win_width, int win_height, const char* win_title ) ;
+romulus_app romulus_new_app( RKString app_name, float version, romulus_bool logging ) ;
 
-romulus_scene romulus_new_scene( romulus_window window, romulus_bool vsync ) ;
+void romulus_destroy_app( romulus_app app ) ;
+
+IDKApp romulus_get_idk_app( romulus_app app ) ;
+
+romulus_window romulus_new_window( romulus_app app, int win_width, int win_height, const char* win_title, romulus_bool vsync ) ;
+
+romulus_app romulus_get_app_from_window( romulus_window window ) ;
+
+romulus_scene romulus_get_scene_from_window( romulus_window window ) ;
+
+IDKWindow romulus_get_idk_window( romulus_window window ) ;
 
 void romulus_destroy_scene( romulus_scene scene ) ;
-
-void romulus_bind_texture_unit( unsigned int tunit ) ;
 
 void romulus_set_scene_vsync( romulus_scene scene, romulus_bool vsync ) ;
 
 romulus_bool romulus_is_scene_vsync( romulus_scene scene ) ;
 
-void romulus_set_cull_back_face( romulus_scene scene, romulus_bool cull ) ;
-
-void romulus_set_depth_test( romulus_scene scene, romulus_bool depth ) ;
-
 romulus_window romulus_get_window_from_scene( romulus_scene scene ) ;
 
 void romulus_set_active_scene( romulus_scene scene ) ;
+
+void romulus_enable_scene_logging( romulus_scene scene, romulus_bool logging ) ;
+
+int romulus_check_extension( const char* extension ) ;
 
 void romulus_attributes_zero( romulus_shader shader ) ;
 
@@ -91,7 +101,7 @@ void romulus_load_projection_matrix_to_shader( RKMVector matrix, romulus_shader 
 
 void romulus_load_view_matrix_to_shader( RKMVector matrix, romulus_shader shader ) ;
 
-romulus_texture romulus_new_texture( romulus_scene scene, const char* texture_name, unsigned int texture_unit, romulus_raw_texture raw_texture ) ;
+romulus_texture romulus_new_texture( romulus_scene scene, const char* texture_name, unsigned int texture_unit, romulus2d_texture raw_texture, float quality ) ;
 
 void romulus_destroy_texture( romulus_texture texture ) ;
 
@@ -101,7 +111,7 @@ int romulus_get_texture_width( romulus_texture texture ) ;
 
 int romulus_get_texture_height( romulus_texture texture ) ;
 
-romulus_material romulus_new_material( romulus_shader shader, romulus_init_material init ) ;
+romulus_material romulus_new_material( romulus_shader shader, romulus_init_material init, RKArgs material_args ) ;
 
 void romulus_destroy_material( romulus_material material ) ;
 
@@ -189,10 +199,22 @@ romulus_render_stage romulus_new_render_stage( romulus_camera camera, romulus_re
 
 void romulus_destroy_render_stage( romulus_render_stage stage ) ;
 
+romulus_camera romulus_get_camera_from_stage( romulus_render_stage stage ) ;
+
+romulus_render_buffer romulus_get_render_buffer_from_stage( romulus_render_stage stage ) ;
+
+romulus_geometry romulus_get_geometry_from_stage( romulus_render_stage stage ) ;
+
+void romulus_set_cull_back_face( romulus_render_stage stage, romulus_bool cull ) ;
+
+void romulus_set_depth_test( romulus_render_stage stage, romulus_bool depth ) ;
+
+void romulus_set_depth_alpha( romulus_render_stage stage, romulus_bool alpha ) ;
+
 void romulus_render( romulus_render_stage stage ) ;
 
 void romulus_present( romulus_render_stage stage ) ;
 
-void romulus_run_loop( romulus_scene scene, romulus_run_loop_func_type run_loop_func, romulus_run_quit_loop_func_type run_quit_loop_func ) ;
+void romulus_run_loop( romulus_scene scene, romulus_run_loop_func_type run_loop_func, RKArgs run_args, romulus_run_quit_loop_func_type run_quit_loop_func, RKArgs quit_args ) ;
 
 #endif /* romulus_h */

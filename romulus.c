@@ -15,7 +15,7 @@ static const char* vertex_shader0 =
 "in vec3  position ;"
 "in vec2  texcoord ;"
 "out vec2 out_texcoord ;"
-"void main () {"
+"void main() {"
 "gl_Position = vec4(position,1.0) ;"
 "out_texcoord = texcoord ;"
 "}";
@@ -24,14 +24,22 @@ static const char* fragment_shader0 =
 "#version 330\n"
 "in vec2      out_texcoord ;"
 "out vec4     fragColor ;"
+"vec2 texcoord ;"
 "uniform sampler2D romulus_texture_0 ;"
-"void main () {"
+"void main() {"
+//"texcoord = vec2(out_texcoord.s, 1.0 - out_texcoord.t) ;"
 "fragColor = (texture(romulus_texture_0, out_texcoord.st)) ;"
 "}";
 
-struct romulus_texture_s { romulus_raw_texture raw_texture ; unsigned int tid ; unsigned int tunit ; RKString texture_name ; } ;
+struct romulus_app_s { IDKApp App ; romulus_bool logging ; } ;
 
-struct romulus_material_s { RKList mesh_list ; romulus_shader shader ; romulus_attributes_binder attributes ; int active ; romulus_init_material init ; } ;
+struct romulus_window_s { IDKWindow idk_window ; romulus_app app ; romulus_scene scene ; } ;
+
+struct romulus_scene_s { romulus_window display_window ; romulus_bool logging ; int width ; int height ; romulus_bool vsync ; } ;
+
+struct romulus_texture_s { romulus2d_texture raw_texture ; unsigned int tid ; unsigned int tunit ; RKString texture_name ; } ;
+
+struct romulus_material_s { RKList mesh_list ; RKArgs material_args ; romulus_shader shader ; romulus_attributes_binder attributes ; int active ; romulus_init_material init ; } ;
 
 struct romulus_mesh_s { RKList entity_list ; int active ; romulus_attributes_constructor attributes_constructor ; romulus_attributes_binder attributes ;
     
@@ -49,21 +57,40 @@ struct romulus_render_buffer_s { romulus_scene scene ; int width ; int height ; 
 
 unsigned int fbuf ; unsigned int fbuf_tex ; unsigned int fbuf_depth_tex ; } ;
 
-struct romulus_scene_s { romulus_window display_window ; int width ; int height ; romulus_bool cull ; romulus_bool depth ; romulus_bool vsync ; } ;
+struct romulus_render_stage_s { romulus_camera camera ; romulus_render_buffer render_buffer ; romulus_geometry geometry ;
+    
+romulus_bool cull ; romulus_bool depth ; romulus_bool alpha ; } ;
 
-struct romulus_render_stage_s { romulus_camera camera ; romulus_render_buffer render_buffer ; romulus_geometry geometry ; } ;
+int romulus_check_extension( const char* extension ) {
+    
+    GLint n, i = 0 ;
+    
+    glGetIntegerv(GL_NUM_EXTENSIONS, &n) ;
+    
+    while ( i < n ) {
+        
+     if ( !strcmp(extension, (char*)glGetStringi(GL_EXTENSIONS, i)) ) return 1 ;
+        
+        i++ ;
+    }
+    
+    return 0 ;
+}
 
-
-void romulus_bind_texture_unit( unsigned int tunit ) {
+static void romulus_bind_texture_unit( unsigned int tunit ) {
     
     if ( tunit > 15 ) return ;
     
     glActiveTexture(GL_TEXTURE0 + tunit) ;
 }
 
-static void romulus_resize_display( IDKWindow window, int width, int height ) {
+static void romulus_resize_display( IDKWindow idk_window, int width, int height ) {
     
-    romulus_scene scene = IDK_GetPtrFromWindow(window) ;
+    romulus_window window = IDK_GetPtrFromWindow(idk_window) ;
+    
+    IDKApp App = romulus_get_idk_app(window->app)  ;
+    
+    romulus_scene scene = window->scene ;
     
     romulus_set_active_scene(scene) ;
     
@@ -75,68 +102,70 @@ static void romulus_resize_display( IDKWindow window, int width, int height ) {
     
     scene->height = height ;
     
-    IDKLog("romulus, gl viewport width: ", 0, 0) ;
+    IDKLog(App, "romulus, gl viewport width: ", 0, 0) ;
     
-    IDKLogInt(width, 1, 0) ;
+    IDKLogInt(App, width, 1, 0) ;
     
-    IDKLog("romulus, gl viewport height: ", 0, 0) ;
+    IDKLog(App, "romulus, gl viewport height: ", 0, 0) ;
     
-    IDKLogInt(height, 1, 0) ;
+    IDKLogInt(App, height, 1, 0) ;
 
 }
 
-void romulus_report_error( const char* report_name ) {
+void romulus_report_error( romulus_app app, const char* report_name ) {
+    
+    IDKApp App = romulus_get_idk_app(app)  ;
     
     switch (glGetError()) {
             
         case GL_INVALID_ENUM:
             
-            IDKLog("romulus reports error ", 0, 1) ;
+            IDKLog(App, "romulus reports error ", 0, 1) ;
             
-            IDKLog("GL_INVALID_ENUM from, ", 0, 1) ;
+            IDKLog(App, "GL_INVALID_ENUM from, ", 0, 1) ;
             
-            IDKLog(report_name, 1, 1) ;
+            IDKLog(App, report_name, 1, 1) ;
             
             break;
             
         case GL_INVALID_VALUE:
             
-            IDKLog("romulus reports error ", 0, 1) ;
+            IDKLog(App, "romulus reports error ", 0, 1) ;
             
-            IDKLog("GL_INVALID_VALUE from, ", 0, 1) ;
+            IDKLog(App, "GL_INVALID_VALUE from, ", 0, 1) ;
             
-            IDKLog(report_name, 1, 1) ;
+            IDKLog(App, report_name, 1, 1) ;
             
             break;
             
         case GL_INVALID_OPERATION:
             
-            IDKLog("romulus reports error ", 0, 1) ;
+            IDKLog(App, "romulus reports error ", 0, 1) ;
             
-            IDKLog("GL_INVALID_OPERATION from, ", 0, 1) ;
+            IDKLog(App, "GL_INVALID_OPERATION from, ", 0, 1) ;
             
-            IDKLog(report_name, 1, 1) ;
+            IDKLog(App, report_name, 1, 1) ;
             
             break;
             
             
         case GL_INVALID_FRAMEBUFFER_OPERATION:
             
-            IDKLog("romulus reports error ", 0, 1) ;
+            IDKLog(App, "romulus reports error ", 0, 1) ;
             
-            IDKLog("GL_INVALID_FRAMEBUFFER_OPERATION from, ", 0, 1) ;
+            IDKLog(App, "GL_INVALID_FRAMEBUFFER_OPERATION from, ", 0, 1) ;
             
-            IDKLog(report_name, 1, 1) ;
+            IDKLog(App, report_name, 1, 1) ;
             
             break;
             
         case GL_OUT_OF_MEMORY:
             
-            IDKLog("romulus reports error ", 0, 1) ;
+             IDKLog(App, "romulus reports error ", 0, 1) ;
             
-            IDKLog("GL_OUT_OF_MEMORY from, ", 0, 1) ;
+             IDKLog(App, "GL_OUT_OF_MEMORY from, ", 0, 1) ;
             
-            IDKLog(report_name, 1, 1) ;
+             IDKLog(App, report_name, 1, 1) ;
             
             break;
             
@@ -145,46 +174,98 @@ void romulus_report_error( const char* report_name ) {
     }
 }
 
-romulus_window romulus_new_window( int win_width, int win_height, const char* win_title ) {
+romulus_app romulus_new_app( RKString app_name, float version, romulus_bool logging ) {
     
-    return IDK_NewWindow(win_width, win_height, win_title, romulus_resize_display) ;
+    romulus_app app = RKMem_NewMemOfType(struct romulus_app_s) ;
+    
+    app->logging = logging ;
+    
+    app->App = IDK_NewApp(app_name, version, NULL) ;
+    
+    return app ;
 }
 
-romulus_scene romulus_new_scene( romulus_window window, romulus_bool vsync ) {
+void romulus_destroy_app( romulus_app app ) {
     
-    int x, y = 0 ;
+    IDK_DestroyApp(app->App) ;
+    
+    free(app) ;
+}
+
+IDKApp romulus_get_idk_app( romulus_app app ) {
+    
+    return app->App ;
+}
+
+static romulus_scene romulus_new_scene( romulus_window window, romulus_bool vsync ) ;
+
+romulus_window romulus_new_window( romulus_app app, int win_width, int win_height, const char* win_title, romulus_bool vsync ) {
+    
+    romulus_window window = RKMem_NewMemOfType(struct romulus_window_s) ;
+    
+    window->app = app ;
+    
+    window->idk_window = IDK_NewWindow(app->App, win_width, win_height, win_title, romulus_resize_display) ;
+    
+    IDK_SetPtrFromWindow(window->idk_window, window) ;
+    
+    romulus_new_scene(window, vsync) ;
+    
+    return window ;
+}
+
+static void romulus_destroy_window( romulus_window window ) {
+    
+    IDK_DestroyWindow(window->idk_window) ;
+    
+    free(window) ;
+}
+
+romulus_app romulus_get_app_from_window( romulus_window window ) {
+    
+    return window->app ;
+}
+
+romulus_scene romulus_get_scene_from_window( romulus_window window ) {
+    
+    return window->scene ;
+}
+
+IDKWindow romulus_get_idk_window( romulus_window window ) {
+    
+    return window->idk_window ;
+}
+
+static romulus_scene romulus_new_scene( romulus_window window, romulus_bool vsync ) {
+    
+    int x, y = 0;
     
     romulus_scene scene = RKMem_NewMemOfType(struct romulus_scene_s) ;
     
     scene->display_window = window ;
     
-    IDK_SetPtrFromWindow(scene->display_window, scene) ;
+    scene->logging = romulus_false ;
     
-    IDK_SetRasterResizeFunc(window, romulus_resize_display) ;
+    if ( scene->display_window->app->logging  ) romulus_enable_scene_logging(scene, romulus_true) ;
     
-    IDK_GetRasterSize(scene->display_window, &x, &y) ;
+    IDK_SetRasterResizeFunc(window->idk_window, romulus_resize_display) ;
     
-    romulus_resize_display(scene->display_window, x, y) ;
+    IDK_GetRasterSize(window->idk_window, &x, &y) ;
+    
+    window->scene = scene ;
+    
+    romulus_resize_display(window->idk_window, x, y) ;
     
     romulus_set_scene_vsync(scene, vsync) ;
-    
-    romulus_set_cull_back_face(scene, romulus_true) ;
-    
-    romulus_set_depth_test(scene, romulus_true) ;
     
     return scene ;
 }
 
 void romulus_destroy_scene( romulus_scene scene ) {
     
-    IDK_DestroyWindow(scene->display_window) ;
+    romulus_destroy_window(scene->display_window) ;
     
     free(scene) ;
-}
-
-void romulus_set_active_scene( romulus_scene scene ) {
-    
-    IDK_SetWindowContextCurrent(scene->display_window) ;
 }
 
 void romulus_set_scene_vsync( romulus_scene scene, romulus_bool vsync ) {
@@ -193,13 +274,13 @@ void romulus_set_scene_vsync( romulus_scene scene, romulus_bool vsync ) {
         
         scene->vsync = romulus_true ;
         
-        IDK_EnableVsync(scene->display_window) ;
+        IDK_EnableVsync(scene->display_window->idk_window) ;
         
     } else {
         
        scene->vsync = romulus_false ;
         
-       IDK_DisableVsync(scene->display_window) ;
+        IDK_DisableVsync(scene->display_window->idk_window) ;
     }
 }
 
@@ -208,26 +289,28 @@ romulus_bool romulus_is_scene_vsync( romulus_scene scene ) {
     return scene->vsync ;
 }
 
-void romulus_set_cull_back_face( romulus_scene scene, romulus_bool cull ) {
-    
-    scene->cull = cull ;
-}
-
-void romulus_set_depth_test( romulus_scene scene, romulus_bool depth ) {
-    
-    scene->depth = depth ;
-}
-
 romulus_window romulus_get_window_from_scene( romulus_scene scene ) {
     
     return scene->display_window ;
 }
 
-static int romulus_build_shaders( romulus_shader shader, const char* vertex_source, const char* fragment_source ) {
+void romulus_set_active_scene( romulus_scene scene ) {
+    
+    IDK_SetWindowContextCurrent(scene->display_window->idk_window) ;
+}
+
+void romulus_enable_scene_logging( romulus_scene scene, romulus_bool logging ) {
+    
+     scene->logging = ( scene->display_window->app->logging && logging ) ? romulus_true : romulus_false ;
+}
+
+static int romulus_build_shaders( romulus_app app, romulus_shader shader, const char* vertex_source, const char* fragment_source ) {
     
     int status = 0 ;
     
     int length_of_log = 0 ;
+    
+    IDKApp App = app->App ;
     
     GLuint vertex_shader = glCreateShader(GL_VERTEX_SHADER) ;
     
@@ -243,9 +326,9 @@ static int romulus_build_shaders( romulus_shader shader, const char* vertex_sour
         
         glGetShaderInfoLog(vertex_shader, length_of_log, &length_of_log, log) ;
         
-        IDKLog("romulus, vertex shader compile log: ", 0, 1) ;
+        IDKLog(App, "romulus, vertex shader compile log: ", 0, 1) ;
         
-        IDKLog(log, 1, 1) ;
+        IDKLog(App, log, 1, 1) ;
         
         free(log) ;
     }
@@ -255,7 +338,7 @@ static int romulus_build_shaders( romulus_shader shader, const char* vertex_sour
     
     if ( status == 0 ) {
         
-        IDKLog("romulus, failed to compile vertex shader", 1, 1) ;
+        IDKLog(App, "romulus, failed to compile vertex shader", 1, 1) ;
         
         return 0 ;
     }
@@ -274,9 +357,9 @@ static int romulus_build_shaders( romulus_shader shader, const char* vertex_sour
         
         glGetShaderInfoLog(fragment_shader, length_of_log, &length_of_log, log) ;
         
-        IDKLog("romulus, frag shader compile log: ", 0, 1) ;
+        IDKLog(App, "romulus, frag shader compile log: ", 0, 1) ;
         
-        IDKLog(log, 1, 1) ;
+        IDKLog(App, log, 1, 1) ;
         
         free(log) ;
     }
@@ -285,7 +368,7 @@ static int romulus_build_shaders( romulus_shader shader, const char* vertex_sour
     
     if ( status == 0 ) {
         
-        IDKLog("romulus, failed to compile fragment shader", 1, 1) ;
+        IDKLog(App, "romulus, failed to compile fragment shader", 1, 1) ;
         
         return 0 ;
     }
@@ -310,9 +393,9 @@ static int romulus_build_shaders( romulus_shader shader, const char* vertex_sour
         
         glGetProgramInfoLog(romulus_shader_program, length_of_log, &length_of_log, log) ;
         
-        IDKLog("romulus, link program log: ", 0, 1) ;
+        IDKLog(App, "romulus, link program log: ", 0, 1) ;
         
-        IDKLog(log, 1, 1) ;
+        IDKLog(App, log, 1, 1) ;
         
         free(log) ;
     }
@@ -321,7 +404,7 @@ static int romulus_build_shaders( romulus_shader shader, const char* vertex_sour
     
     if ( status == 0 ) {
         
-        IDKLog("romulus, failed to link program", 1, 1) ;
+        IDKLog(App, "romulus, failed to link program", 1, 1) ;
         
         return 0 ;
     }
@@ -336,9 +419,9 @@ static int romulus_build_shaders( romulus_shader shader, const char* vertex_sour
         
         glGetProgramInfoLog(romulus_shader_program, length_of_log, &length_of_log, log) ;
         
-        IDKLog("romulus, validate program log: ", 0, 1) ;
+        IDKLog(App, "romulus, validate program log: ", 0, 1) ;
         
-        IDKLog(log, 1, 1) ;
+        IDKLog(App, log, 1, 1) ;
         
         free(log) ;
     }
@@ -347,7 +430,7 @@ static int romulus_build_shaders( romulus_shader shader, const char* vertex_sour
     
     if ( status == 0 ) {
         
-        IDKLog("romulus, failed to validate program", 1, 1) ;
+        IDKLog(App, "romulus, failed to validate program", 1, 1) ;
         
         return 0 ;
     }
@@ -369,7 +452,7 @@ romulus_shader romulus_new_shader( romulus_scene scene, const char* vertex_shade
     
     shader->attributes = attributes ;
     
-    shader->pid = romulus_build_shaders(shader,  vertex_shader,  fragment_shader) ;
+    shader->pid = romulus_build_shaders(scene->display_window->app, shader,  vertex_shader,  fragment_shader) ;
     
     return shader ;
 }
@@ -660,9 +743,26 @@ void romulus_load_view_matrix_to_shader( RKMVector matrix, romulus_shader shader
     glUniformMatrix4fv(glGetUniformLocation(shader->pid, "view_matrix"), 1, 0, matrix) ;
 }
 
-static GLuint romulus_load_texture_to_opengl(JHGInt* rawdata, int x, int y, GLenum format, GLenum type) {
+static GLuint romulus_load_texture_to_opengl(void* rawdata, int x, int y, GLenum iformat, GLenum format, GLenum type, float quality) {
     
     GLuint romulus_tex_name = 0 ;
+    
+    int anisotropic = 0 ;
+    
+    float max = 0 ;
+    
+    float a = 0 ;
+    
+    RKMath_Clamp(&quality, 0, 3, 1) ;
+    
+    if ( quality > 2 ) {
+        
+        quality -= 2 ;
+        
+        anisotropic = 1 ;
+        
+        a = quality ;
+    }
     
     glGenTextures(1, &romulus_tex_name) ;
     
@@ -676,7 +776,44 @@ static GLuint romulus_load_texture_to_opengl(JHGInt* rawdata, int x, int y, GLen
     
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR) ;
     
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, x, y, 0, format, type, rawdata) ;
+    glTexImage2D(GL_TEXTURE_2D, 0, iformat, x, y, 0, format, type, rawdata) ;
+    
+    if ( quality > 0 ) {
+    
+      if ( !anisotropic ) {
+        
+        if ( quality <= 1 ) quality *= -1 ;
+        
+        if ( quality > 1 ) quality -= 1 ;
+          
+      } else {
+          
+        quality = 0 ;
+          
+      }
+        
+      glGenerateMipmap(GL_TEXTURE_2D) ;
+    
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR) ;
+    
+      glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_LOD_BIAS, quality) ;
+        
+        if ( (anisotropic) && (romulus_check_extension("GL_EXT_texture_filter_anisotropic")) ) {
+            
+          #ifndef GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT
+             #define GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT 0x1100 //Don't Care
+          #endif
+            
+          #ifndef GL_TEXTURE_MAX_ANISOTROPY_EXT
+            #define GL_TEXTURE_MAX_ANISOTROPY_EXT 0x1100 //Don't Care
+          #endif
+            
+          glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &max) ;
+            
+          glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, (a * max)) ;
+            
+        }
+    }
     
     return romulus_tex_name ;
 }
@@ -702,14 +839,40 @@ static GLuint romulus_load_depth_texture_to_opengl( int x, int y ) {
     return romulus_tex_name ;
 }
 
-static unsigned int romulus_load_raw_texture( romulus_raw_texture texture ) {
+static unsigned int romulus_load_raw_texture( romulus2d_texture texture, float quality ) {
     
-    int x, y = 0 ;
+    int x = romulus2d_texture_get_width(texture) ;
     
-    return romulus_load_texture_to_opengl(JHG_DrawPixels(texture, &x, &y), x, y, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV) ;
+    int y = romulus2d_texture_get_height(texture) ;
+    
+    switch ( romulus2d_get_texture_format(texture) ) {
+        
+        case romulus2d_rgba8_texture_format:
+            
+           return romulus_load_texture_to_opengl(romulus2d_get_raw_texture_data(texture), x, y, GL_RGBA8, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, quality) ;
+            
+        break;
+            
+        case romulus2d_rgba32_texture_format:
+            
+           return romulus_load_texture_to_opengl(romulus2d_get_raw_texture_data(texture), x, y, GL_RGBA32F, GL_RGBA, GL_FLOAT, quality) ;
+            
+        break;
+            
+        case romulus2d_depth_texture_format:
+            
+           return romulus_load_texture_to_opengl(romulus2d_get_raw_texture_data(texture), x, y, GL_DEPTH_COMPONENT, GL_DEPTH_COMPONENT, GL_FLOAT, 0) ;
+            
+        break;
+            
+        default:
+            break;
+    }
+    
+    return 0 ;
 }
 
-romulus_texture romulus_new_texture( romulus_scene scene, const char* texture_name, unsigned int texture_unit, romulus_raw_texture raw_texture ) {
+romulus_texture romulus_new_texture( romulus_scene scene, const char* texture_name, unsigned int texture_unit, romulus2d_texture raw_texture, float quality ) {
     
     romulus_set_active_scene(scene) ;
     
@@ -719,7 +882,7 @@ romulus_texture romulus_new_texture( romulus_scene scene, const char* texture_na
     
     texture->texture_name = RKString_NewString(texture_name) ;
     
-    texture->tid = romulus_load_raw_texture(raw_texture) ;
+    texture->tid = romulus_load_raw_texture(raw_texture,quality) ;
     
     texture->tunit = (texture_unit > 15) ? 15 : texture_unit ;
     
@@ -729,8 +892,6 @@ romulus_texture romulus_new_texture( romulus_scene scene, const char* texture_na
 void romulus_destroy_texture( romulus_texture texture ) {
     
     RKString_DestroyString(texture->texture_name) ;
-    
-    //JHGPixels_scenefree(texture->raw_texture) ;
     
     glDeleteTextures(1, &texture->tid) ;
     
@@ -748,15 +909,15 @@ void romulus_load_texture_to_shader( romulus_texture texture, romulus_shader sha
 
 int romulus_get_texture_width( romulus_texture texture ) {
     
-    return JHGPixels_GetX(texture->raw_texture) ;
+    return romulus2d_texture_get_width(texture->raw_texture) ;
 }
 
 int romulus_get_texture_height( romulus_texture texture ) {
     
-    return JHGPixels_GetY(texture->raw_texture) ;
+    return romulus2d_texture_get_height(texture->raw_texture) ;
 }
 
-romulus_material romulus_new_material( romulus_shader shader, romulus_init_material init ) {
+romulus_material romulus_new_material( romulus_shader shader, romulus_init_material init, RKArgs material_args ) {
     
     romulus_material material = RKMem_NewMemOfType(struct romulus_material_s) ;
     
@@ -768,12 +929,16 @@ romulus_material romulus_new_material( romulus_shader shader, romulus_init_mater
     
     material->init = init ;
     
+    material->material_args = RKArgs_CloneArgs(material_args) ;
+    
     material->mesh_list = RKList_NewList() ;
     
     return material ;
  }
 
 void romulus_destroy_material( romulus_material material ) {
+    
+    RKArgs_DestroyClonedArgs(material->material_args) ;
     
     RKList_DeleteList(material->mesh_list) ;
     
@@ -992,7 +1157,7 @@ static void romulus_new_framebuffer( romulus_render_buffer render_buffer ) {
     
     glViewport(0, 0, render_buffer->width, render_buffer->height) ;
     
-    fbuf_tex = romulus_load_texture_to_opengl(0, render_buffer->width, render_buffer->height, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV) ;
+    fbuf_tex = romulus_load_texture_to_opengl(0, render_buffer->width, render_buffer->height, GL_RGBA8, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, -1) ;
     
     fbuf_depth_tex = romulus_load_depth_texture_to_opengl(render_buffer->width, render_buffer->height) ;
     
@@ -1007,6 +1172,14 @@ static void romulus_new_framebuffer( romulus_render_buffer render_buffer ) {
     render_buffer->fbuf = fbuf ;
     
     render_buffer->fbuf_tex = fbuf_tex ;
+    
+    //clear the framebuffer?
+    glBindFramebuffer(GL_FRAMEBUFFER, fbuf) ;
+    glClearColor(0.5f, 0.5f, 0.5f, 1.0f) ;
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT) ;
+    glUseProgram(0) ;
+    glDrawElements(GL_TRIANGLES, 0, GL_UNSIGNED_INT, 0) ;
+
 }
 
 romulus_render_buffer romulus_new_render_buffer( romulus_scene scene, int width, int height, RKMVector projection_matrix ) {
@@ -1071,6 +1244,12 @@ romulus_render_stage romulus_new_render_stage( romulus_camera camera, romulus_re
     
     stage->geometry = geometry ;
     
+    romulus_set_cull_back_face(stage, romulus_true) ;
+    
+    romulus_set_depth_test(stage, romulus_true) ;
+    
+    romulus_set_depth_alpha(stage, romulus_false) ;
+    
     return stage ;
 }
 
@@ -1079,13 +1258,43 @@ void romulus_destroy_render_stage( romulus_render_stage stage ) {
     free(stage) ;
 }
 
+romulus_camera romulus_get_camera_from_stage( romulus_render_stage stage ) {
+
+    return stage->camera ;
+}
+
+romulus_render_buffer romulus_get_render_buffer_from_stage( romulus_render_stage stage ) {
+    
+    return stage->render_buffer ;
+}
+
+romulus_geometry romulus_get_geometry_from_stage( romulus_render_stage stage ) {
+    
+    return stage->geometry ;
+}
+
+void romulus_set_cull_back_face( romulus_render_stage stage, romulus_bool cull ) {
+    
+    stage->cull = cull ;
+}
+
+void romulus_set_depth_test( romulus_render_stage stage, romulus_bool depth ) {
+    
+    stage->depth = depth ;
+}
+
+void romulus_set_depth_alpha( romulus_render_stage stage, romulus_bool alpha ) {
+    
+    stage->alpha = alpha ;
+}
+
 void romulus_render( romulus_render_stage stage ) {
     
     romulus_set_active_scene(stage->render_buffer->scene) ;
     
     glBindFramebuffer(GL_FRAMEBUFFER, stage->render_buffer->fbuf) ;
     
-    if (stage->render_buffer->scene->depth)  {
+    if (stage->depth)  {
         
         glEnable(GL_DEPTH_TEST) ;
         
@@ -1094,13 +1303,24 @@ void romulus_render( romulus_render_stage stage ) {
         glDisable(GL_DEPTH_TEST) ;
     }
     
-    if (stage->render_buffer->scene->cull)  {
+    if (stage->cull)  {
         
         glEnable(GL_CULL_FACE) ;
         
     } else {
         
         glDisable(GL_CULL_FACE) ;
+    }
+    
+    if (stage->alpha)  {
+        
+        glEnable(GL_BLEND) ;
+        
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)  ;
+        
+    } else {
+        
+        glDisable(GL_BLEND) ;
     }
     
     glClearColor(0.5f, 0.5f, 0.5f, 1.0f) ;
@@ -1141,7 +1361,7 @@ void romulus_render( romulus_render_stage stage ) {
             
             romulus_load_view_matrix_to_shader(stage->camera->view_matrix, material->shader) ;
             
-            material->init(material->shader) ;
+            material->init(material->shader,material->material_args) ;
             
             mesh_node = RKList_GetFirstNode( material->mesh_list) ;
             
@@ -1187,19 +1407,28 @@ void romulus_render( romulus_render_stage stage ) {
         material_node = RKList_GetNextNode(material_node) ;
     }
     
-    romulus_report_error("romulus_render") ;
-    
     glUseProgram(0) ;
+    
+    romulus_report_error( stage->render_buffer->scene->display_window->app, "romulus_render0") ;
+    
+    //clear the framebuffer?
+    glBindFramebuffer(GL_FRAMEBUFFER, 0) ;
+    glClearColor(0.5f, 0.5f, 0.5f, 1.0f) ;
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT) ;
+    glUseProgram(0) ;
+    glDrawElements(GL_TRIANGLES, 0, GL_UNSIGNED_INT, 0) ;
+    
+    romulus_report_error( stage->render_buffer->scene->display_window->app, "romulus_render1") ;
 }
 
-static void romulus_attributes_base( romulus_shader shader ) {
+static void romulus_present_attributes_binder( romulus_shader shader ) {
     
     romulus_bind_attribute_location_to_shader("position", 0, shader) ;
     
     romulus_bind_attribute_location_to_shader("texcoord", 1, shader) ;
 }
 
-static void romulus_attributes_constructor_base( int vertex_count, RKArgs args ) {
+static void romulus_present_attributes_constructor( int vertex_count, RKArgs args ) {
     
     RKArgs_UseArgs(args) ;
     
@@ -1249,9 +1478,9 @@ void romulus_present( romulus_render_stage stage ) {
     
     if ( !init ) {
         
-        mesh = romulus_new_mesh(stage->render_buffer->scene, romulus_attributes_constructor_base, newargs( args(GLfloat*,quad_pos_array,quad_texcoord_array) ),
-                                                                                                                       romulus_attributes_base, 4, quad_elementArray_array, 6) ;
-        shader = romulus_new_shader(stage->render_buffer->scene, vertex_shader0, fragment_shader0, romulus_attributes_base) ;
+        mesh = romulus_new_mesh(stage->render_buffer->scene, romulus_present_attributes_constructor, newargs( args(GLfloat*,quad_pos_array,quad_texcoord_array) ),
+                                                                                                                       romulus_present_attributes_binder, 4, quad_elementArray_array, 6) ;
+        shader = romulus_new_shader(stage->render_buffer->scene, vertex_shader0, fragment_shader0, romulus_present_attributes_binder) ;
         
         init++ ;
     }
@@ -1267,11 +1496,11 @@ void romulus_present( romulus_render_stage stage ) {
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->ebo) ;
     
     glDrawElements(GL_TRIANGLES, mesh->index_count, GL_UNSIGNED_INT, 0) ;
-
-    romulus_report_error("romulus_present") ;
+    
+    romulus_report_error( stage->render_buffer->scene->display_window->app, "romulus_present") ;
 }
 
-void romulus_run_loop( romulus_scene scene, romulus_run_loop_func_type run_loop_func, romulus_run_quit_loop_func_type run_quit_loop_func ) {
+void romulus_run_loop( romulus_scene scene, romulus_run_loop_func_type run_loop_func, RKArgs run_args, romulus_run_quit_loop_func_type run_quit_loop_func, RKArgs quit_args ) {
     
-    IDK_WindowRunLoop(scene->display_window, run_loop_func, run_quit_loop_func) ;
+    IDK_WindowRunLoop(scene->display_window->idk_window, run_loop_func, run_args, run_quit_loop_func, quit_args) ;
 }
