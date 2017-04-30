@@ -46,8 +46,8 @@
  */
 
 #include <memory.h>
-#include "RKMath.h"
-#include "matrixUtil.h"
+#include <RKLib/RKMath.h>
+#include <romulus/matrixUtil.h>
 
 void mtxMultiply(float* ret, const float* lhs, const float* rhs)
 {
