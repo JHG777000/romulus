@@ -19,7 +19,7 @@
 #ifndef romulus_h
 #define romulus_h
 
-#include <IDK.h>
+#include <IDK/IDK.h>
 
 #include <romulus/romulus2d.h>
 
