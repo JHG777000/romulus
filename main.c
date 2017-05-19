@@ -179,6 +179,10 @@ void runframe( RKArgs args ) {
     
     static float roll = 0 ;
     
+    static int enter_fullscreen = 0 ;
+    
+    static int exit_fullscreen = 0 ;
+    
     if ( IDK_GetKey(idk_window,idk_up_key) ) pos[2] += 0.01 ;
     
     if ( IDK_GetKey(idk_window,idk_down_key) ) pos[2] -= 0.01 ;
@@ -202,6 +206,24 @@ void runframe( RKArgs args ) {
     if ( IDK_GetKey(idk_window,idk_q_key) ) rot[2] += 1 ;
     
     if ( IDK_GetKey(idk_window,idk_e_key) ) rot[2] -= 1 ;
+    
+    if ( IDK_GetKey(idk_window,idk_numpad_1) && !enter_fullscreen ) enter_fullscreen = 1 ;
+    
+    if ( enter_fullscreen && !IDK_GetKey(idk_window,idk_numpad_1) ) {
+        
+        enter_fullscreen = 0 ;
+        
+        romulus_enter_fullscreen(window) ;
+    }
+    
+    if ( IDK_GetKey(idk_window,idk_numpad_2) && !exit_fullscreen ) exit_fullscreen = 1 ;
+    
+    if ( exit_fullscreen && !IDK_GetKey(idk_window,idk_numpad_2) ) {
+        
+        exit_fullscreen = 0 ;
+        
+        romulus_exit_fullscreen(window) ;
+    }
     
     romulus_camera_set_pos(camera, pos) ;
     
@@ -245,7 +267,7 @@ int main(int argc, const char * argv[]) {
     
     romulus_app app = romulus_new_app(rkstr("romulus_test_app"), 0, romulus_true) ;
     
-    romulus_window window = romulus_new_window(app, 1366, 768, "Hello World!!!!", romulus_true) ;
+    romulus_window window = romulus_new_window(app, 1366, 768, "Hello World!!!!", romulus_true, romulus_true) ;
     
     romulus_scene scene = romulus_get_scene_from_window(window) ;
     

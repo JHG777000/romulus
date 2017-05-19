@@ -67,7 +67,7 @@ typedef IDKWindowRunLoopFuncType romulus_run_loop_func_type ;
 
 typedef IDKWindowQuitRunLoopFuncType romulus_run_quit_loop_func_type ;
 
-void romulus_report_error( romulus_app app, const char* report_name ) ;
+void romulus_report_error( romulus_scene scene, const char* report_name ) ;
 
 romulus_app romulus_new_app( RKString app_name, float version, romulus_bool logging ) ;
 
@@ -75,7 +75,11 @@ void romulus_destroy_app( romulus_app app ) ;
 
 IDKApp romulus_get_idk_app( romulus_app app ) ;
 
-romulus_window romulus_new_window( romulus_app app, int win_width, int win_height, const char* win_title, romulus_bool vsync ) ;
+romulus_window romulus_new_window( romulus_app app, int win_width, int win_height, const char* win_title, romulus_bool vsync, romulus_bool scene_logging ) ;
+
+void romulus_enter_fullscreen( romulus_window window ) ;
+
+void romulus_exit_fullscreen( romulus_window window ) ;
 
 romulus_app romulus_get_app_from_window( romulus_window window ) ;
 

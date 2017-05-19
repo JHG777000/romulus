@@ -111,6 +111,8 @@ static void romulus_resize_display( IDKWindow idk_window, int width, int height 
     
     scene->height = height ;
     
+    if (!scene->logging) return ;
+    
     IDKLog(App, "romulus, gl viewport width: ", 0, 0) ;
     
     IDKLogInt(App, width, 1, 0) ;
@@ -121,9 +123,11 @@ static void romulus_resize_display( IDKWindow idk_window, int width, int height 
 
 }
 
-void romulus_report_error( romulus_app app, const char* report_name ) {
+void romulus_report_error( romulus_scene scene, const char* report_name ) {
     
-    IDKApp App = romulus_get_idk_app(app)  ;
+    IDKApp App = romulus_get_idk_app(scene->display_window->app)  ;
+    
+    if ( !scene->logging ) return ;
     
     switch (glGetError()) {
             
@@ -206,9 +210,9 @@ IDKApp romulus_get_idk_app( romulus_app app ) {
     return app->App ;
 }
 
-static romulus_scene romulus_new_scene( romulus_window window, romulus_bool vsync ) ;
+static romulus_scene romulus_new_scene( romulus_window window, romulus_bool vsync, romulus_bool logging ) ;
 
-romulus_window romulus_new_window( romulus_app app, int win_width, int win_height, const char* win_title, romulus_bool vsync ) {
+romulus_window romulus_new_window( romulus_app app, int win_width, int win_height, const char* win_title, romulus_bool vsync, romulus_bool scene_logging ) {
     
     romulus_window window = RKMem_NewMemOfType(struct romulus_window_s) ;
     
@@ -218,7 +222,7 @@ romulus_window romulus_new_window( romulus_app app, int win_width, int win_heigh
     
     IDK_SetPtrFromWindow(window->idk_window, window) ;
     
-    romulus_new_scene(window, vsync) ;
+    romulus_new_scene(window, vsync, scene_logging) ;
     
     return window ;
 }
@@ -228,6 +232,16 @@ static void romulus_destroy_window( romulus_window window ) {
     IDK_DestroyWindow(window->idk_window) ;
     
     free(window) ;
+}
+
+void romulus_enter_fullscreen( romulus_window window ) {
+    
+    IDK_EnterFullscreen(window->idk_window) ;
+}
+
+void romulus_exit_fullscreen( romulus_window window ) {
+    
+    IDK_ExitFullscreen(window->idk_window) ;
 }
 
 romulus_app romulus_get_app_from_window( romulus_window window ) {
@@ -245,7 +259,7 @@ IDKWindow romulus_get_idk_window( romulus_window window ) {
     return window->idk_window ;
 }
 
-static romulus_scene romulus_new_scene( romulus_window window, romulus_bool vsync ) {
+static romulus_scene romulus_new_scene( romulus_window window, romulus_bool vsync, romulus_bool logging ) {
     
     int x, y = 0;
     
@@ -253,9 +267,9 @@ static romulus_scene romulus_new_scene( romulus_window window, romulus_bool vsyn
     
     scene->display_window = window ;
     
-    scene->logging = romulus_false ;
+    scene->logging = logging ;
     
-    if ( scene->display_window->app->logging  ) romulus_enable_scene_logging(scene, romulus_true) ;
+    if ( scene->display_window->app->logging  ) romulus_enable_scene_logging(scene, logging) ;
     
     IDK_SetRasterResizeFunc(window->idk_window, romulus_resize_display) ;
     
@@ -263,9 +277,28 @@ static romulus_scene romulus_new_scene( romulus_window window, romulus_bool vsyn
     
     window->scene = scene ;
     
-    romulus_resize_display(window->idk_window, x, y) ;
-    
     romulus_set_scene_vsync(scene, vsync) ;
+    
+    if ( scene->logging ) {
+        
+        IDKLog(window->app->App,"romulus rendering libary, version ", 0, 0) ;
+        
+        IDKLogFloat(window->app->App,0,1,0) ;
+        
+        IDKLog(window->app->App,"romulus built on top of: ", 0, 0) ;
+        
+        IDK_LogVersion(window->app->App) ;
+        
+        IDKLog(window->app->App,"romulus, opengl renderer: ", 0, 0) ;
+    
+        IDKLog(window->app->App,(const char*)glGetString(GL_RENDERER), 1, 0) ;
+    
+        IDKLog(window->app->App,"romulus, opengl version: ", 0, 0) ;
+    
+        IDKLog(window->app->App,(const char*)glGetString(GL_VERSION), 1, 0) ;
+    }
+    
+     romulus_resize_display(window->idk_window, x, y) ;
     
     return scene ;
 }
@@ -1418,7 +1451,7 @@ void romulus_render( romulus_render_stage stage ) {
     
     glUseProgram(0) ;
     
-    romulus_report_error( stage->render_buffer->scene->display_window->app, "romulus_render0") ;
+    romulus_report_error( stage->render_buffer->scene, "romulus_render0") ;
     
     //clear the framebuffer?
     glBindFramebuffer(GL_FRAMEBUFFER, 0) ;
@@ -1427,7 +1460,7 @@ void romulus_render( romulus_render_stage stage ) {
     glUseProgram(0) ;
     glDrawElements(GL_TRIANGLES, 0, GL_UNSIGNED_INT, 0) ;
     
-    romulus_report_error( stage->render_buffer->scene->display_window->app, "romulus_render1") ;
+    romulus_report_error( stage->render_buffer->scene, "romulus_render1") ;
 }
 
 static void romulus_present_attributes_binder( romulus_shader shader ) {
@@ -1506,7 +1539,7 @@ void romulus_present( romulus_render_stage stage ) {
     
     glDrawElements(GL_TRIANGLES, mesh->index_count, GL_UNSIGNED_INT, 0) ;
     
-    romulus_report_error( stage->render_buffer->scene->display_window->app, "romulus_present") ;
+    romulus_report_error( stage->render_buffer->scene, "romulus_present") ;
 }
 
 void romulus_run_loop( romulus_scene scene, romulus_run_loop_func_type run_loop_func, RKArgs run_args, romulus_run_quit_loop_func_type run_quit_loop_func, RKArgs quit_args ) {
