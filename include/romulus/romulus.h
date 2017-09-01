@@ -47,6 +47,8 @@ typedef struct romulus_camera_s* romulus_camera ;
 
 typedef struct romulus_texture_s* romulus_texture ;
 
+typedef struct romulus_texture_array_s* romulus_texture_array ;
+
 typedef enum { romulus_byte_type_id, romulus_sbyte_type_id,
     
 romulus_short_type_id, romulus_ushort_type_id,
@@ -62,6 +64,8 @@ typedef void (*romulus_attributes_binder)(romulus_shader shader) ;
 typedef void (*romulus_attributes_constructor)(int vertex_count, RKArgs args) ;
 
 typedef void (*romulus_init_material)(romulus_shader shader, RKArgs material_args) ;
+
+typedef void (*romulus_update_uniforms)(romulus_shader shader, RKArgs uniform_args) ;
 
 typedef IDKWindowRunLoopFuncType romulus_run_loop_func_type ;
 
@@ -101,19 +105,13 @@ void romulus_enable_scene_logging( romulus_scene scene, romulus_bool logging ) ;
 
 int romulus_check_extension( const char* extension ) ;
 
-void romulus_attributes_zero( romulus_shader shader ) ;
+int romulus_get_max_texture_units( romulus_scene scene ) ;
 
 romulus_shader romulus_new_shader( romulus_scene scene, const char* vertex_shader, const char* fragment_shader, romulus_attributes_binder attributes ) ;
 
 void romulus_destroy_shader( romulus_shader shader ) ;
 
 void romulus_bind_attribute_location_to_shader( const char* attribute_name, unsigned int location, romulus_shader shader )  ;
-
-void romulus_load_transform_matrix_to_shader( RKMVector matrix, romulus_shader shader ) ;
-
-void romulus_load_projection_matrix_to_shader( RKMVector matrix, romulus_shader shader ) ;
-
-void romulus_load_view_matrix_to_shader( RKMVector matrix, romulus_shader shader ) ;
 
 romulus_texture romulus_new_texture( romulus_scene scene, const char* texture_name, unsigned int texture_unit, romulus2d_texture raw_texture, float quality ) ;
 
@@ -124,6 +122,29 @@ void romulus_load_texture_to_shader( romulus_texture texture, romulus_shader sha
 int romulus_get_texture_width( romulus_texture texture ) ;
 
 int romulus_get_texture_height( romulus_texture texture ) ;
+
+romulus2d_texture_format romulus_get_texture_format( romulus_texture texture ) ;
+
+romulus_texture_array romulus_new_texture_array( romulus_scene scene, romulus2d_texture_format format, const char* texture_name,
+                                                unsigned int texture_unit, int width, int height, int max_num_of_textures ) ;
+
+void romulus_destroy_texture_array( romulus_texture_array texture_array ) ;
+
+void romulus_load_texture_array_to_shader( romulus_texture_array texture_array, romulus_shader shader ) ;
+
+void romulus_add_texture_to_texture_array( romulus2d_texture texture, romulus_texture_array texture_array ) ;
+
+void romulus_set_texture_array_quality( romulus_texture_array texture_array, float quality ) ;
+
+int romulus_get_texture_array_width( romulus_texture_array texture_array ) ;
+
+int romulus_get_texture_array_height( romulus_texture_array texture_array ) ;
+
+int romulus_get_texture_array_max_num_of_textures( romulus_texture_array texture_array ) ;
+
+int romulus_get_texture_array_num_of_textures( romulus_texture_array texture_array ) ;
+
+romulus2d_texture_format romulus_get_texture_array_format( romulus_texture_array texture_array ) ;
 
 romulus_material romulus_new_material( romulus_shader shader, romulus_init_material init, RKArgs material_args ) ;
 
@@ -171,9 +192,19 @@ void romulus_enable_attribute_with_mesh( romulus_mesh mesh, unsigned int index )
 
 void romulus_disable_attribute_with_mesh( romulus_mesh mesh, unsigned int index ) ;
 
-romulus_entity romulus_new_entity( romulus_mesh mesh, RKMVector pos, RKMVector rot, float scale ) ;
+void romulus_load_float_to_shader( float value, RKString value_name, romulus_shader shader ) ;
+
+void romulus_load_transform_matrix_to_shader( RKMVector matrix, romulus_shader shader ) ;
+
+void romulus_load_projection_matrix_to_shader( RKMVector matrix, romulus_shader shader ) ;
+
+void romulus_load_view_matrix_to_shader( RKMVector matrix, romulus_shader shader ) ;
+
+romulus_entity romulus_new_entity( romulus_mesh mesh, RKMVector pos, RKMVector rot, float scale, romulus_update_uniforms update_uniforms, RKArgs uniforms_args ) ;
 
 void romulus_destroy_entity( romulus_entity entity ) ;
+
+void romulus_swap_entity_order( romulus_entity entity_a, romulus_entity entity_b ) ;
 
 void romulus_set_entity_pos( romulus_entity entity, RKMVector pos ) ;
 
@@ -197,7 +228,7 @@ void romulus_destroy_geometry( romulus_geometry geometry ) ;
 
 void romulus_add_material_to_geometry( romulus_material material, romulus_geometry geometry ) ;
 
-romulus_render_buffer romulus_new_render_buffer( romulus_scene scene, int width, int height, RKMVector projection_matrix ) ;
+romulus_render_buffer romulus_new_render_buffer( romulus_scene scene, int width, int height ) ;
 
 void romulus_destroy_render_buffer( romulus_render_buffer render_buffer ) ;
 
@@ -207,9 +238,7 @@ int romulus_get_render_buffer_width( romulus_render_buffer render_buffer ) ;
 
 int romulus_get_render_buffer_height( romulus_render_buffer render_buffer ) ;
 
-void romulus_set_render_buffer_projection_matrix( romulus_render_buffer render_buffer, RKMVector projection_matrix ) ;
-
-romulus_render_stage romulus_new_render_stage( romulus_camera camera, romulus_render_buffer render_buffer, romulus_geometry geometry ) ;
+romulus_render_stage romulus_new_render_stage( romulus_camera camera, RKMVector projection_matrix, romulus_render_buffer render_buffer, romulus_geometry geometry ) ;
 
 void romulus_destroy_render_stage( romulus_render_stage stage ) ;
 
@@ -225,9 +254,11 @@ void romulus_set_depth_test( romulus_render_stage stage, romulus_bool depth ) ;
 
 void romulus_set_depth_alpha( romulus_render_stage stage, romulus_bool alpha ) ;
 
+void romulus_set_render_stage_projection_matrix( romulus_render_stage stage, RKMVector projection_matrix ) ;
+
 void romulus_render( romulus_render_stage stage ) ;
 
-void romulus_present( romulus_render_stage stage ) ;
+void romulus_present( romulus_render_buffer render_buffer ) ;
 
 void romulus_run_loop( romulus_scene scene, romulus_run_loop_func_type run_loop_func, RKArgs run_args, romulus_run_quit_loop_func_type run_quit_loop_func, RKArgs quit_args ) ;
 

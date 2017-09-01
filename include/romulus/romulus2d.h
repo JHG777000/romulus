@@ -37,6 +37,10 @@ typedef void (*romulus2d_rect_render_func)(romulus2d_rect rect, RKArgs args) ;
 
 romulus2d_texture romulus2d_new_texture( RKMVector background_color, int width, int height, romulus2d_texture_format format ) ;
 
+romulus2d_texture romulus2d_new_texture_from_png( const char* filepath ) ;
+
+void romulus2d_destroy_texture( romulus2d_texture texture ) ;
+
 int romulus2d_texture_get_width( romulus2d_texture texture ) ;
 
 int romulus2d_texture_get_height( romulus2d_texture texture ) ;

@@ -20,7 +20,12 @@
 
 #include <romulus/romulus.h>
 
-static const char* vertex_shader0 =
+#define STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_STATIC
+#define STBI_ONLY_PNG
+#include <stb_image.h>
+
+static const char* vertex_shader2d =
 "#version 330\n"
 "in vec3  position ;"
 "in vec2  texcoord ;"
@@ -30,30 +35,96 @@ static const char* vertex_shader0 =
 "out_texcoord = texcoord ;"
 "}";
 
-static const char* fragment_shader0 =
+static const char* fragment_shader2d =
 "#version 330\n"
 "in vec2      out_texcoord ;"
 "out vec4     fragColor ;"
-"uniform sampler2D romulus_texture_0 ;"
+"uniform sampler2DArray romulus2d_texture_array ;"
+"uniform float texcoord_z ;"
 "void main() {"
-"fragColor = (texture(romulus_texture_0, out_texcoord.st)) ;"
+"fragColor = (texture(romulus2d_texture_array, vec3(out_texcoord.s,out_texcoord.t,texcoord_z))) ;"
 "}";
 
 struct romulus2d_texture_s { romulus2d_texture_format format ; int width ; int height ; void* data ; } ;
 
-struct romulus2d_rect_s { romulus2d_rect_render_func render_func ; romulus_mesh quad ; romulus2d_texture raster_surface ;
+struct romulus2d_rect_s { romulus_entity entity ; float texture_id ; romulus2d_rect_render_func render_func ; romulus2d_texture raster_surface ;
     
 RKMath_NewVector(background_color, 4) ; romulus2d_texture background ; romulus_texture texture ; } ;
 
-struct romulus2d_scene_s { romulus_scene scene3d ; romulus_render_stage stage ; } ;
+struct romulus2d_scene_s { romulus_scene scene ; romulus_render_stage stage ; romulus_mesh quad ; } ;
+
+//Bad idea, but STB_IMAGE_STATIC should probably be defined
+//and, this should suppress unused function warnings on most IDEs and compilers
+//and static analyzers(at least Xcode's).
+
+static int nothing( void ) {
+    
+#define nothing2(x) ((void*)x) + (int)ptr
+    
+    void* ptr = NULL ;
+    
+    ptr = stbi_load_from_memory ;
+    
+    ptr =  nothing2(stbi_load_from_callbacks) ;
+    
+    ptr =  nothing2(stbi_loadf) ;
+    
+    ptr =  nothing2(stbi_loadf_from_memory) ;
+    
+    ptr =  nothing2(stbi_loadf_from_callbacks) ;
+    
+    ptr =  nothing2(stbi_ldr_to_hdr_gamma) ;
+    
+    ptr =  nothing2(stbi_ldr_to_hdr_scale) ;
+    
+    ptr =  nothing2(stbi_hdr_to_ldr_gamma) ;
+    
+    ptr =  nothing2(stbi_hdr_to_ldr_scale) ;
+    
+    ptr =  nothing2(stbi_is_hdr_from_callbacks) ;
+    
+    ptr =  nothing2(stbi_is_hdr_from_memory) ;
+    
+    ptr =  nothing2(stbi_is_hdr) ;
+    
+    ptr =  nothing2(stbi_failure_reason) ;
+    
+    ptr =  nothing2(stbi_image_free) ;
+    
+    ptr =  nothing2(stbi_info_from_memory) ;
+    
+    ptr =  nothing2(stbi_info_from_callbacks) ;
+    
+    ptr =  nothing2(stbi_info) ;
+    
+    ptr =  nothing2(stbi_set_unpremultiply_on_load) ;
+    
+    ptr =  nothing2(stbi_convert_iphone_png_to_rgb) ;
+    
+    ptr =  nothing2(stbi_set_flip_vertically_on_load) ;
+    
+    ptr =  nothing2(stbi_zlib_decode_malloc) ;
+    
+    ptr =  nothing2(stbi_zlib_decode_buffer) ;
+    
+    ptr =  nothing2(stbi_zlib_decode_noheader_malloc) ;
+    
+    ptr =  nothing2(stbi_zlib_decode_noheader_buffer) ;
+    
+    ptr =  nothing2(stbi__sse2_available) ;
+    
+    ptr =  nothing2(stbi__at_eof) ;
+    
+    return (int)(nothing2(stbi_load_16)) ;
+}
 
 static void romulus2d_material_init( romulus_shader shader, RKArgs material_args ) {
     
     RKArgs_UseArgs(material_args) ;
     
-    romulus_texture the_texture = *RKArgs_GetNextArg(material_args, romulus_texture*) ;
+    romulus_texture_array the_texture = RKArgs_GetNextArg(material_args, romulus_texture_array) ;
     
-    romulus_load_texture_to_shader(the_texture, shader) ;
+    romulus_load_texture_array_to_shader(the_texture, shader) ;
 }
 
 static void romulus2d_attributes_binder( romulus_shader shader ) {
@@ -69,29 +140,67 @@ static void romulus2d_attributes_constructor( int vertex_count, RKArgs args ) {
     
     romulus_construct_attribute(0, RKArgs_GetNextArg(args, GLfloat*), romulus_float_type_id, 3, vertex_count, romulus_false) ;
     
-    romulus_construct_attribute(1, RKArgs_GetNextArg(args, GLfloat*), romulus_float_type_id, 2, vertex_count, romulus_true) ;
+    romulus_construct_attribute(1, RKArgs_GetNextArg(args, GLfloat*), romulus_float_type_id, 2, vertex_count, romulus_false) ;
 }
-/*
-static romulus_render_stage new_render_stage_for_romulus2d( romulus_scene scene ) {
+
+static GLfloat quad_pos_array[] = {
+    -1.0f, 1.0f, 0.0f,
+    1.0f,  1.0f, 0.0f,
+    1.0f, -1.0f, 0.0f,
+    -1.0f,-1.0f, 0.0f
+};
+
+static GLfloat quad_texcoord_array[] = {
+    0.0f,  1.0f,
+    1.0f,  1.0f,
+    1.0f,  0.0f,
+    0.0f,  0.0f
+};
+
+static GLuint quad_elementArray_array[] = {
+    0, 2, 1,
+    0, 3, 2
+};
+
+static romulus_render_stage new_render_stage_for_romulus2d( romulus_scene scene, romulus2d_scene scene2d, romulus_render_buffer render_buffer,
+                                                            int rect_width, int rect_hieght ) {
     
     RKMath_Vectorit(pos, 0, 0, 0) ;
     
+    RKMath_NewVector(projection_matrix, 16) ;
+    
+    int max_texture_layers_size = 0 ;
+ 
+    glGetIntegerv(GL_MAX_ARRAY_TEXTURE_LAYERS, &max_texture_layers_size) ;
+ 
     romulus_camera camera = romulus_new_camera(pos, 0, 0, 0) ;
     
-    romulus_shader shader = romulus_new_shader(scene, vertex_shader0, fragment_shader0, romulus_attributes_base) ;
+    romulus_shader shader = romulus_new_shader(scene, vertex_shader2d, fragment_shader2d, romulus2d_attributes_binder) ;
     
-    romulus_new_material(shader, <#romulus_init_material init#>) ;
+    romulus_texture_array texture_array = romulus_new_texture_array(scene, romulus2d_rgba8_texture_format, "romulus2d_texture_array", 0, rect_width, rect_hieght, max_texture_layers_size) ;
     
-    return romulus_new_render_stage(<#romulus_camera camera#>, <#romulus_render_buffer render_buffer#>, <#romulus_geometry geometry#>)
+    romulus_material material = romulus_new_material(shader, romulus2d_material_init, newargs( args(romulus_texture_array,texture_array) )) ;
+    
+    scene2d->quad = romulus_new_mesh(scene, romulus2d_attributes_constructor, newargs( args(GLfloat*,quad_pos_array,quad_texcoord_array) ), romulus2d_attributes_binder, 4, quad_elementArray_array, 6) ;
+    
+    romulus_geometry geom2d = romulus_new_geometry() ;
+    
+    romulus_add_mesh_to_material(scene2d->quad, material) ;
+    
+    romulus_new_ographic_matrix(projection_matrix, -1.0f, 1.0f, -1.0f, 1.0f, 0.1f, 1000.0f) ;
+ 
+    return romulus_new_render_stage(camera, projection_matrix, render_buffer, geom2d) ;
 }
-*/
-romulus2d_scene romulus2d_new_scene( romulus_scene scene ) {
+
+romulus2d_scene romulus2d_new_scene( romulus_scene scene, romulus_render_buffer render_buffer, int rect_width, int rect_height ) {
     
     romulus2d_scene scene2d = RKMem_NewMemOfType(struct romulus2d_scene_s) ;
     
-    scene2d->scene3d = scene ;
+    scene2d->scene = scene ;
     
-    scene2d->stage = NULL ;
+    scene2d->stage = new_render_stage_for_romulus2d(scene, scene2d, render_buffer, rect_width, rect_height) ;
+    
+    nothing() ;
     
     return scene2d ;
 }
@@ -223,6 +332,33 @@ romulus2d_texture romulus2d_new_texture( RKMVector background_color, int width, 
     return texture ;
 }
 
+romulus2d_texture romulus2d_new_texture_from_png( const char* filepath ) {
+    
+    romulus2d_texture texture = RKMem_NewMemOfType(struct romulus2d_texture_s) ;
+    
+    int n = 0 ;
+    
+    texture->format = romulus2d_rgba8_texture_format ;
+    
+    texture->data = stbi_load(filepath,&texture->width,&texture->height,&n,4) ;
+    
+    if ( (texture->data == NULL) || (n != 4) ) {
+        
+        free(texture) ;
+        
+        return NULL ;
+    }
+    
+    return texture ;
+}
+
+void romulus2d_destroy_texture( romulus2d_texture texture ) {
+    
+    free(texture->data) ;
+    
+    free(texture) ;
+}
+
 int romulus2d_texture_get_width( romulus2d_texture texture ) {
     
     return texture->width ;
@@ -305,14 +441,19 @@ void romulus2d_texture_copy( romulus2d_texture dest, romulus2d_texture src ) {
     memcpy(dest->data, src->data, src_size) ;
 }
 
-romulus2d_rect romulus2d_new_rect( romulus2d_scene scene, romulus2d_rect_render_func render_func, RKMVector background_color, int width, int height,
+static void romulus2d_update_uniforms( romulus_shader shader, RKArgs args ) {
+    
+    RKArgs_UseArgs(args) ;
+    
+    float value = RKArgs_GetNextArg(args, float) ;
+    
+    romulus_load_float_to_shader(value, rkstr("texcoord_z"), shader) ;
+}
+
+romulus2d_rect romulus2d_new_rect( romulus2d_scene scene2d, romulus2d_rect_render_func render_func, RKMVector background_color, int width, int height,
                                   romulus2d_texture_format format ) {
     
-    if ( scene != NULL ) return NULL ;
-    
     romulus2d_rect rect = RKMem_NewMemOfType(struct romulus2d_rect_s) ;
-    
-    rect->quad = NULL ;
     
     rect->texture = NULL ;
     
@@ -323,6 +464,13 @@ romulus2d_rect romulus2d_new_rect( romulus2d_scene scene, romulus2d_rect_render_
     rect->raster_surface = romulus2d_new_texture(rect->background_color, width, height, format) ;
     
     rect->background = romulus2d_new_texture(rect->background_color, width, height, format) ;
+    
+    if ( scene2d != NULL ) {
+        
+        RKMath_Vectorit(zero, 0, 0, 0) ;
+        
+        rect->entity = romulus_new_entity(scene2d->quad, zero, zero, 0, romulus2d_update_uniforms, newargs( args(float,0) )) ;
+    }
     
     return rect ;
 }

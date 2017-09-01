@@ -111,7 +111,7 @@ void attributes_constructor( int vertex_count, RKArgs args ) {
     
     romulus_construct_attribute(0, RKArgs_GetNextArg(args, float*), romulus_float_type_id, 3, vertex_count, romulus_false) ;
     
-    romulus_construct_attribute(1, RKArgs_GetNextArg(args, float*), romulus_float_type_id, 2, vertex_count, romulus_true) ;
+    romulus_construct_attribute(1, RKArgs_GetNextArg(args, float*), romulus_float_type_id, 2, vertex_count, romulus_false) ;
 }
 
 void attributes_binder( romulus_shader shader ) {
@@ -163,9 +163,13 @@ void runframe( RKArgs args ) {
     
     romulus_camera camera = RKArgs_GetArgWithIndex(args, romulus_camera, 5) ;
     
+    romulus_render_buffer render_buffer = RKArgs_GetArgWithIndex(args, romulus_render_buffer, 8) ;
+    
     romulus_entity entity = RKArgs_GetArgWithIndex(args, romulus_entity, 11 ) ;
     
     romulus_render_stage stage = RKArgs_GetArgWithIndex(args, romulus_render_stage, 12) ;
+    
+    romulus_texture texture_cube = RKArgs_GetArgWithIndex(args, romulus_texture, 13) ;
     
     IDKWindow idk_window = romulus_get_idk_window(window) ;
     
@@ -237,15 +241,17 @@ void runframe( RKArgs args ) {
     
     romulus_set_entity_rot(entity, rot) ;
     
-    romulus2d_render_rect(draw_rect, args) ;
+    //romulus2d_render_rect(draw_rect, args) ;
     
-    *texture = romulus_new_texture(scene, "romulus_texture_1", 0, romulus2d_get_texture_from_rect(draw_rect), 0) ;
+    //*texture = romulus_new_texture(scene, "romulus_texture_1", 0, romulus2d_get_texture_from_rect(draw_rect), 0) ;
+    
+    *texture = texture_cube ;
    
     romulus_render(stage) ;
     
-    romulus_present(stage) ;
+    romulus_present(render_buffer) ;
    
-    romulus_destroy_texture(*texture) ;
+    if (*texture != texture_cube) romulus_destroy_texture(*texture) ;
 }
 
 void shutdownapp( RKArgs args ) {
@@ -263,6 +269,13 @@ int main(int argc, const char * argv[]) {
     
     RKMath_NewVector(projection_matrix, 16) ;
     
+    if ( argc < 2 ) {
+        
+        printf("romulus_test_app needs a png file.\n") ;
+        
+        exit(EXIT_FAILURE) ;
+    }
+    
     romulus_texture* texture = RKMem_NewMemOfType(romulus_texture) ;
     
     romulus_app app = romulus_new_app(rkstr("romulus_test_app"), 0, romulus_true) ;
@@ -270,6 +283,12 @@ int main(int argc, const char * argv[]) {
     romulus_window window = romulus_new_window(app, 1366, 768, "Hello World!!!!", romulus_true, romulus_true) ;
     
     romulus_scene scene = romulus_get_scene_from_window(window) ;
+    
+    romulus2d_texture texture2d = romulus2d_new_texture_from_png(argv[1]) ;
+    
+    romulus_texture texture_cube = romulus_new_texture(scene, "romulus_texture_1", 0, texture2d, 0) ;
+    
+    romulus2d_destroy_texture(texture2d) ;
     
     romulus2d_rect draw_rect = romulus2d_new_rect(NULL, draw, color, 1024, 1024, romulus2d_rgba8_texture_format) ;
     
@@ -279,27 +298,27 @@ int main(int argc, const char * argv[]) {
    
     romulus_shader shader = romulus_new_shader(scene, vertex_shader1, fragment_shader1, attributes_binder) ;
     
-    romulus_new_perspective_matrix(projection_matrix, 1920, 1080, 60, 0.1f, 1000.0f) ;
-    
-    romulus_render_buffer render_buffer = romulus_new_render_buffer(scene, 1920, 1080, projection_matrix) ;
+    romulus_render_buffer render_buffer = romulus_new_render_buffer(scene, 1920, 1080) ;
     
     romulus_geometry geometry = romulus_new_geometry() ;
     
     romulus_material material = romulus_new_material(shader, material_init, newargs( args(romulus_texture*, texture) )) ;
     
-    romulus_entity entity = romulus_new_entity(cube, pos, rot, 1) ;
+    romulus_entity entity = romulus_new_entity(cube, pos, rot, 1, NULL, NULL) ;
     
     romulus_add_mesh_to_material(cube, material) ;
     
     romulus_add_material_to_geometry(material, geometry) ;
     
-    romulus_render_stage stage = romulus_new_render_stage(camera, render_buffer, geometry) ;
+    romulus_new_perspective_matrix(projection_matrix, romulus_get_render_buffer_width(render_buffer), romulus_get_render_buffer_height(render_buffer), 60, 0.1f, 1000.0f) ;
+    
+    romulus_render_stage stage = romulus_new_render_stage(camera, projection_matrix, render_buffer, geometry) ;
     
     romulus_run_loop(scene, runframe, newargs( args(romulus_app,app), args(romulus_window,window), args(romulus_texture*, texture),
                                               args(romulus_scene, scene), args(romulus2d_rect, draw_rect), args(romulus_camera, camera),
                                               args(romulus_mesh, cube), args(romulus_shader, shader), args(romulus_render_buffer, render_buffer),
                                               args(romulus_geometry, geometry), args(romulus_material, material),
-                                              args(romulus_entity, entity), args(romulus_render_stage, stage) ), shutdownapp, newargs(  ) ) ;
+                                              args(romulus_entity, entity), args(romulus_render_stage, stage), args(romulus_texture, texture_cube) ), shutdownapp, newargs(  ) ) ;
     
     return 0 ;
 }

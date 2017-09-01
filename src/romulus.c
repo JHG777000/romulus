@@ -46,7 +46,13 @@ struct romulus_window_s { IDKWindow idk_window ; romulus_app app ; romulus_scene
 
 struct romulus_scene_s { romulus_window display_window ; romulus_bool logging ; int width ; int height ; romulus_bool vsync ; } ;
 
-struct romulus_texture_s { romulus2d_texture raw_texture ; unsigned int tid ; unsigned int tunit ; RKString texture_name ; } ;
+struct romulus_texture_s { romulus2d_texture_format format ; int width ; int height ;
+    
+unsigned int tid ; unsigned int tunit ; RKString texture_name ; } ;
+
+struct romulus_texture_array_s { int max_num_of_textures ; int num_of_textures ; romulus2d_texture_format format ; int width ; int height ;
+    
+unsigned int tid ; unsigned int tunit ; RKString texture_name ; } ;
 
 struct romulus_material_s { RKList mesh_list ; RKArgs material_args ; romulus_shader shader ; romulus_attributes_binder attributes ; int active ; romulus_init_material init ; } ;
 
@@ -54,7 +60,9 @@ struct romulus_mesh_s { RKList entity_list ; int active ; romulus_attributes_con
     
 int vao ; int ebo ; int vertex_count ; int index_count ; } ;
 
-struct romulus_entity_s { romulus_mesh mesh ; RKList_node node ; int active ; RKMath_NewVector(pos, 3) ; RKMath_NewVector(rot, 3) ; float scale ; } ;
+struct romulus_entity_s { romulus_mesh mesh ; RKList_node node ; romulus_update_uniforms update_uniforms ;
+    
+RKArgs uniform_args ; int active ; RKMath_NewVector(pos, 3) ; RKMath_NewVector(rot, 3) ; float scale ; } ;
 
 struct romulus_shader_s { romulus_attributes_binder attributes ; unsigned int pid ; } ;
 
@@ -62,11 +70,11 @@ struct romulus_camera_s { RKMath_NewVector(view_matrix, 16) ; RKMath_NewVector(p
 
 struct romulus_geometry_s { RKList material_list ; } ;
 
-struct romulus_render_buffer_s { romulus_scene scene ; int width ; int height ; RKMath_NewVector(projection_matrix, 16) ;
+struct romulus_render_buffer_s { romulus_scene scene ; int width ; int height ;
 
 unsigned int fbuf ; unsigned int fbuf_tex ; unsigned int fbuf_depth_tex ; } ;
 
-struct romulus_render_stage_s { romulus_camera camera ; romulus_render_buffer render_buffer ; romulus_geometry geometry ;
+struct romulus_render_stage_s { romulus_camera camera ; RKMath_NewVector(projection_matrix, 16) ; romulus_render_buffer render_buffer ; romulus_geometry geometry ;
     
 romulus_bool cull ; romulus_bool depth ; romulus_bool alpha ; } ;
 
@@ -86,9 +94,24 @@ int romulus_check_extension( const char* extension ) {
     return 0 ;
 }
 
+int romulus_get_max_texture_units( romulus_scene scene ) {
+    
+    int max_texture_units = 0 ;
+    
+    romulus_set_active_scene(scene) ;
+    
+    glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &max_texture_units) ;
+    
+    return max_texture_units ;
+}
+
 static void romulus_bind_texture_unit( unsigned int tunit ) {
     
-    if ( tunit > 15 ) return ;
+    int max_texture_units = 0 ;
+    
+    glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &max_texture_units) ;
+    
+    if ( tunit > max_texture_units ) return ;
     
     glActiveTexture(GL_TEXTURE0 + tunit) ;
 }
@@ -120,7 +143,6 @@ static void romulus_resize_display( IDKWindow idk_window, int width, int height 
     IDKLog(App, "romulus, gl viewport height: ", 0, 0) ;
     
     IDKLogInt(App, height, 1, 0) ;
-
 }
 
 void romulus_report_error( romulus_scene scene, const char* report_name ) {
@@ -482,10 +504,6 @@ static int romulus_build_shaders( romulus_app app, romulus_shader shader, const 
     return romulus_shader_program ;
 }
 
-void romulus_attributes_zero( romulus_shader shader ) {
-    
-}
-
 romulus_shader romulus_new_shader( romulus_scene scene, const char* vertex_shader, const char* fragment_shader, romulus_attributes_binder attributes ) {
     
     romulus_set_active_scene(scene) ;
@@ -628,9 +646,11 @@ void romulus_construct_attribute( unsigned int index, void* data, romulus_data_t
     
     GLsizei stride = romulus_get_gl_type_size(romulus_get_gl_type(data_type)) ;
     
+    if ( (data_type == romulus_float_type_id) || (data_type == romulus_double_type_id) ) is_normalized = romulus_false ;
+    
     glGenBuffers(1, &vbo) ;
     
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo) ;
     
     glBufferData(GL_ARRAY_BUFFER, num_of_elements * num_of_data_per_element * stride, data, GL_STATIC_DRAW) ;
     
@@ -640,7 +660,6 @@ void romulus_construct_attribute( unsigned int index, void* data, romulus_data_t
     
     glVertexAttribPointer(index, num_of_data_per_element, romulus_get_gl_type(data_type), is_normalized, num_of_data_per_element*stride, NULL) ;
 }
-
 
 static int romulus_make_vao( int* getebo, romulus_attributes_constructor attributes_constructor, RKArgs attribute_args, int vertex_count, unsigned int* indexes, int index_count ) {
     
@@ -764,6 +783,13 @@ void romulus_disable_attribute_with_mesh( romulus_mesh mesh, unsigned int index 
     glDisableVertexAttribArray(index) ;
 }
 
+void romulus_load_float_to_shader( float value, RKString value_name, romulus_shader shader ) {
+    
+    glUseProgram(shader->pid) ;
+    
+    glUniform1f(glGetUniformLocation(shader->pid, RKString_GetString(value_name)), value) ;
+}
+
 void romulus_load_transform_matrix_to_shader( RKMVector matrix, romulus_shader shader ) {
     
     glUseProgram(shader->pid) ;
@@ -783,6 +809,164 @@ void romulus_load_view_matrix_to_shader( RKMVector matrix, romulus_shader shader
     glUseProgram(shader->pid) ;
     
     glUniformMatrix4fv(glGetUniformLocation(shader->pid, "view_matrix"), 1, 0, matrix) ;
+}
+
+static GLuint romulus_opengl_generate_texture_array(int x, int y, int z, GLenum iformat, GLenum format, GLenum type) {
+    
+    GLuint romulus_tex_name = 0 ;
+    
+    glGenTextures(1, &romulus_tex_name) ;
+    
+    glBindTexture(GL_TEXTURE_2D_ARRAY, romulus_tex_name) ;
+    
+    glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, iformat, x, y, z, 0, format, type, NULL) ;
+    
+    return romulus_tex_name ;
+}
+
+static void romulus_opengl_load_texture_to_texture_array(GLuint romulus_tex_name, void* rawdata, int x, int y, int z, GLenum format, GLenum type) {
+    
+    glBindTexture(GL_TEXTURE_2D_ARRAY, romulus_tex_name) ;
+    
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE) ;
+    
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE) ;
+    
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_LINEAR) ;
+    
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_LINEAR) ;
+    
+    glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, z, x, y, 1, format, type, rawdata) ;
+}
+
+static void romulus_opengl_set_texture_array_quality(GLuint romulus_tex_name, float quality) {
+    
+    int anisotropic = 0 ;
+    
+    float max = 0 ;
+    
+    float a = 0 ;
+    
+    RKMath_Clamp(&quality, 0, 3, 1) ;
+    
+    if ( quality > 2 ) {
+        
+        quality -= 2 ;
+        
+        anisotropic = 1 ;
+        
+        a = quality ;
+    }
+
+    if ( quality > 0 ) {
+        
+        if ( !anisotropic ) {
+            
+            if ( quality <= 1 ) quality *= -1 ;
+            
+            if ( quality > 1 ) quality -= 1 ;
+            
+        } else {
+            
+            quality = 0 ;
+            
+        }
+        
+        glBindTexture(GL_TEXTURE_2D_ARRAY, romulus_tex_name) ;
+        
+        glGenerateMipmap(GL_TEXTURE_2D_ARRAY) ;
+        
+        glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR) ;
+        
+        glTexParameterf(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_LOD_BIAS, quality) ;
+        
+        if ( (anisotropic) && (romulus_check_extension("GL_EXT_texture_filter_anisotropic")) ) {
+            
+            #ifndef GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT
+             #define GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT 0x1100 //Don't Care
+            #endif
+            
+            #ifndef GL_TEXTURE_MAX_ANISOTROPY_EXT
+             #define GL_TEXTURE_MAX_ANISOTROPY_EXT 0x1100 //Don't Care
+            #endif
+            
+            glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &max) ;
+            
+            glTexParameterf(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAX_ANISOTROPY_EXT, (a * max)) ;
+        }
+    }
+}
+
+static unsigned int romulus_generate_texture_array( romulus_texture_array texture_array ) {
+    
+    int x = romulus_get_texture_array_width(texture_array) ;
+    
+    int y = romulus_get_texture_array_height(texture_array) ;
+    
+    int z = romulus_get_texture_array_max_num_of_textures(texture_array) ;
+    
+    switch ( romulus_get_texture_array_format(texture_array) ) {
+            
+        case romulus2d_rgba8_texture_format:
+            
+            return romulus_opengl_generate_texture_array(x, y, z, GL_RGBA8, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV) ;
+            
+            break;
+            
+        case romulus2d_rgba32_texture_format:
+            
+            return romulus_opengl_generate_texture_array(x, y, z, GL_RGBA32F, GL_RGBA, GL_FLOAT) ;
+            
+            break;
+            
+        default:
+            break;
+    }
+    
+    return 0 ;
+}
+
+static void romulus_load_texture_to_texture_array( romulus2d_texture texture, romulus_texture_array texture_array ) {
+    
+    int x = romulus_get_texture_array_width(texture_array) ;
+    
+    int y = romulus_get_texture_array_height(texture_array) ;
+    
+    int z = romulus_get_texture_array_num_of_textures(texture_array) ;
+    
+    romulus2d_texture_format format = romulus_get_texture_array_format(texture_array) ;
+    
+    int tx = romulus2d_texture_get_width(texture) ;
+    
+    int ty = romulus2d_texture_get_height(texture) ;
+    
+    romulus2d_texture_format tformat = romulus2d_get_texture_format(texture) ;
+    
+    if ( !((x == tx) && (y == ty) && (format == tformat) && (texture_array->num_of_textures < texture_array->max_num_of_textures)) ) return ;
+    
+    texture_array->num_of_textures++ ;
+    
+    switch ( romulus_get_texture_array_format(texture_array) ) {
+            
+        case romulus2d_rgba8_texture_format:
+            
+            romulus_opengl_load_texture_to_texture_array(texture_array->tid, romulus2d_get_raw_texture_data(texture), x, y, z, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV) ;
+            
+            return ;
+            
+            break;
+            
+        case romulus2d_rgba32_texture_format:
+            
+            romulus_opengl_load_texture_to_texture_array(texture_array->tid, romulus2d_get_raw_texture_data(texture), x, y, z, GL_RGBA, GL_FLOAT) ;
+            
+            return ;
+            
+            break;
+            
+        default:
+            break;
+    }
 }
 
 static GLuint romulus_load_texture_to_opengl(void* rawdata, int x, int y, GLenum iformat, GLenum format, GLenum type, float quality) {
@@ -920,13 +1104,25 @@ romulus_texture romulus_new_texture( romulus_scene scene, const char* texture_na
     
     romulus_texture texture = RKMem_NewMemOfType(struct romulus_texture_s) ;
     
-    texture->raw_texture = raw_texture ;
+    int max_texture_size = 0 ;
+    
+    int max_texture_units = 0 ;
+    
+    glGetIntegerv(GL_MAX_TEXTURE_SIZE, &max_texture_size) ;
+    
+    glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &max_texture_units) ;
+    
+    texture->width = (romulus2d_texture_get_width(raw_texture) > max_texture_size) ? max_texture_size : romulus2d_texture_get_width(raw_texture) ;
+    
+    texture->height = (romulus2d_texture_get_height(raw_texture) > max_texture_size) ? max_texture_size : romulus2d_texture_get_height(raw_texture) ;
+    
+    texture->format = romulus2d_get_texture_format(raw_texture) ;
     
     texture->texture_name = RKString_NewString(texture_name) ;
     
     texture->tid = romulus_load_raw_texture(raw_texture,quality) ;
     
-    texture->tunit = (texture_unit > 15) ? 15 : texture_unit ;
+    texture->tunit = (texture_unit > max_texture_units) ? max_texture_units : texture_unit ;
     
     return texture ;
 }
@@ -951,12 +1147,109 @@ void romulus_load_texture_to_shader( romulus_texture texture, romulus_shader sha
 
 int romulus_get_texture_width( romulus_texture texture ) {
     
-    return romulus2d_texture_get_width(texture->raw_texture) ;
+    return texture->width ;
 }
 
 int romulus_get_texture_height( romulus_texture texture ) {
     
-    return romulus2d_texture_get_height(texture->raw_texture) ;
+    return texture->height ;
+}
+
+romulus2d_texture_format romulus_get_texture_format( romulus_texture texture ) {
+    
+    return texture->format ;
+}
+
+romulus_texture_array romulus_new_texture_array( romulus_scene scene, romulus2d_texture_format format, const char* texture_name,
+                                                unsigned int texture_unit, int width, int height, int max_num_of_textures ) {
+    
+    romulus_set_active_scene(scene) ;
+    
+    romulus_texture_array texture_array = RKMem_NewMemOfType(struct romulus_texture_array_s) ;
+    
+    int max_texture_size = 0 ;
+    
+    int max_texture_units = 0 ;
+    
+    int max_texture_layers_size = 0 ;
+    
+    glGetIntegerv(GL_MAX_3D_TEXTURE_SIZE, &max_texture_size) ;
+    
+    glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &max_texture_units) ;
+    
+    glGetIntegerv(GL_MAX_ARRAY_TEXTURE_LAYERS, &max_texture_layers_size) ;
+    
+    texture_array->width = (width > max_texture_size) ? max_texture_size : width ;
+    
+    texture_array->height = (height > max_texture_size) ? max_texture_size : height ;
+    
+    texture_array->max_num_of_textures = (max_num_of_textures > max_texture_layers_size) ? max_texture_layers_size : max_num_of_textures ;
+    
+    texture_array->num_of_textures = 0 ;
+    
+    texture_array->format = format ;
+    
+    texture_array->texture_name = RKString_NewString(texture_name) ;
+    
+    texture_array->tid = romulus_generate_texture_array(texture_array) ;
+    
+    texture_array->tunit = (texture_unit > max_texture_units) ? max_texture_units : texture_unit ;
+    
+    return texture_array ;
+
+}
+
+void romulus_destroy_texture_array( romulus_texture_array texture_array ) {
+    
+    RKString_DestroyString(texture_array->texture_name) ;
+    
+    glDeleteTextures(1, &texture_array->tid) ;
+    
+    free(texture_array) ;
+}
+
+void romulus_load_texture_array_to_shader( romulus_texture_array texture_array, romulus_shader shader ) {
+    
+    romulus_bind_texture_unit(texture_array->tunit) ;
+    
+    glBindTexture(GL_TEXTURE_2D_ARRAY, texture_array->tid) ;
+    
+    glUniform1i(glGetUniformLocation(shader->pid, RKString_GetString(texture_array->texture_name) ), texture_array->tunit) ;
+}
+
+void romulus_add_texture_to_texture_array( romulus2d_texture texture, romulus_texture_array texture_array ) {
+    
+    romulus_load_texture_to_texture_array(texture, texture_array) ;
+}
+
+void romulus_set_texture_array_quality( romulus_texture_array texture_array, float quality ) {
+    
+    romulus_opengl_set_texture_array_quality(texture_array->tid, quality) ;
+}
+
+int romulus_get_texture_array_width( romulus_texture_array texture_array ) {
+    
+    return texture_array->width ;
+}
+
+int romulus_get_texture_array_height( romulus_texture_array texture_array ) {
+    
+    return texture_array->height ;
+}
+
+int romulus_get_texture_array_max_num_of_textures( romulus_texture_array texture_array ) {
+    
+    return texture_array->max_num_of_textures ;
+}
+
+int romulus_get_texture_array_num_of_textures( romulus_texture_array texture_array ) {
+    
+    return texture_array->num_of_textures ;
+}
+
+romulus2d_texture_format romulus_get_texture_array_format( romulus_texture_array texture_array ) {
+    
+    return texture_array->format ;
 }
 
 romulus_material romulus_new_material( romulus_shader shader, romulus_init_material init, RKArgs material_args ) {
@@ -1098,11 +1391,15 @@ void romulus_update_camera( romulus_camera camera ) {
     romulus_new_view_matrix(camera->view_matrix, camera->pos, camera->pitch, camera->yaw, camera->roll) ;
 }
 
-romulus_entity romulus_new_entity( romulus_mesh mesh, RKMVector pos, RKMVector rot, float scale ) {
+romulus_entity romulus_new_entity( romulus_mesh mesh, RKMVector pos, RKMVector rot, float scale, romulus_update_uniforms update_uniforms, RKArgs uniforms_args ) {
     
     romulus_entity entity = RKMem_NewMemOfType(struct romulus_entity_s) ;
     
     entity->node = RKList_AddToList(mesh->entity_list, entity) ;
+    
+    entity->uniform_args = (uniforms_args == NULL) ? NULL : RKArgs_CloneArgs(uniforms_args) ;
+    
+    entity->update_uniforms = update_uniforms ;
     
     RKMath_Equal(entity->pos, pos, 3) ;
     
@@ -1119,9 +1416,18 @@ romulus_entity romulus_new_entity( romulus_mesh mesh, RKMVector pos, RKMVector r
 
 void romulus_destroy_entity( romulus_entity entity ) {
     
+    RKArgs_DestroyClonedArgs(entity->uniform_args) ;
+    
     RKList_DeleteNode(entity->mesh->entity_list, entity->node) ;
     
     free(entity) ;
+}
+
+void romulus_swap_entity_order( romulus_entity entity_a, romulus_entity entity_b ) {
+    
+    if ( entity_a->mesh != entity_b->mesh ) return ;
+    
+    RKList_DataSwap(entity_a->node, entity_b->node) ;
 }
 
 void romulus_set_entity_pos( romulus_entity entity, RKMVector pos ) {
@@ -1224,7 +1530,7 @@ static void romulus_new_framebuffer( romulus_render_buffer render_buffer ) {
 
 }
 
-romulus_render_buffer romulus_new_render_buffer( romulus_scene scene, int width, int height, RKMVector projection_matrix ) {
+romulus_render_buffer romulus_new_render_buffer( romulus_scene scene, int width, int height ) {
     
     romulus_render_buffer render_buffer = RKMem_NewMemOfType(struct romulus_render_buffer_s) ;
     
@@ -1235,8 +1541,6 @@ romulus_render_buffer romulus_new_render_buffer( romulus_scene scene, int width,
     render_buffer->height = height ;
     
     romulus_new_framebuffer(render_buffer) ;
-    
-    RKMath_Equal(render_buffer->projection_matrix, projection_matrix, 16) ;
     
     return render_buffer ;
 }
@@ -1251,8 +1555,6 @@ void romulus_destroy_render_buffer( romulus_render_buffer render_buffer ) {
 }
 
 void romulus_load_render_buffer_as_texture_to_shader( romulus_render_buffer render_buffer, const char* texture_name, unsigned int tunit, romulus_shader shader ) {
-    
-    if ( tunit > 15 ) return ;
     
     romulus_bind_texture_unit(tunit) ;
     
@@ -1271,16 +1573,13 @@ int romulus_get_render_buffer_height( romulus_render_buffer render_buffer ) {
     return render_buffer->height ;
 }
 
-void romulus_set_render_buffer_projection_matrix( romulus_render_buffer render_buffer, RKMVector projection_matrix ) {
-    
-    RKMath_Equal(render_buffer->projection_matrix, projection_matrix, 16) ;
-}
-
-romulus_render_stage romulus_new_render_stage( romulus_camera camera, romulus_render_buffer render_buffer, romulus_geometry geometry ) {
+romulus_render_stage romulus_new_render_stage( romulus_camera camera, RKMVector projection_matrix, romulus_render_buffer render_buffer, romulus_geometry geometry ) {
     
     romulus_render_stage stage = RKMem_NewMemOfType(struct romulus_render_stage_s) ;
     
     stage->camera = camera ;
+    
+    RKMath_Equal(stage->projection_matrix, projection_matrix, 16) ;
     
     stage->render_buffer = render_buffer ;
     
@@ -1328,6 +1627,11 @@ void romulus_set_depth_test( romulus_render_stage stage, romulus_bool depth ) {
 void romulus_set_depth_alpha( romulus_render_stage stage, romulus_bool alpha ) {
     
     stage->alpha = alpha ;
+}
+
+void romulus_set_render_stage_projection_matrix( romulus_render_stage stage, RKMVector projection_matrix ) {
+    
+    RKMath_Equal(stage->projection_matrix, projection_matrix, 16) ;
 }
 
 void romulus_render( romulus_render_stage stage ) {
@@ -1399,13 +1703,13 @@ void romulus_render( romulus_render_stage stage ) {
          
             glUseProgram(material->shader->pid) ;
             
-            romulus_load_projection_matrix_to_shader(stage->render_buffer->projection_matrix, material->shader) ;
+            romulus_load_projection_matrix_to_shader(stage->projection_matrix, material->shader) ;
             
             romulus_load_view_matrix_to_shader(stage->camera->view_matrix, material->shader) ;
             
             material->init(material->shader,material->material_args) ;
             
-            mesh_node = RKList_GetFirstNode( material->mesh_list) ;
+            mesh_node = RKList_GetFirstNode(material->mesh_list) ;
             
             while (mesh_node != NULL) {
                 
@@ -1413,7 +1717,7 @@ void romulus_render( romulus_render_stage stage ) {
                 
                 if ( mesh->active ) {
                     
-                    entity_node = RKList_GetFirstNode( mesh->entity_list ) ;
+                    entity_node = RKList_GetFirstNode(mesh->entity_list) ;
                     
                     while (entity_node != NULL) {
                      
@@ -1422,6 +1726,8 @@ void romulus_render( romulus_render_stage stage ) {
                         romulus_new_transform_matrix(transform_matrix, entity->pos, entity->rot, entity->scale) ;
                         
                         romulus_load_transform_matrix_to_shader(transform_matrix, material->shader) ;
+                        
+                        if ( entity->update_uniforms != NULL ) entity->update_uniforms(material->shader, entity->uniform_args) ;
                         
                         if ( mesh->vertex_count != -1 ) {
                             
@@ -1451,7 +1757,7 @@ void romulus_render( romulus_render_stage stage ) {
     
     glUseProgram(0) ;
     
-    romulus_report_error( stage->render_buffer->scene, "romulus_render0") ;
+    romulus_report_error( stage->render_buffer->scene, "romulus_render0" ) ;
     
     //clear the framebuffer?
     glBindFramebuffer(GL_FRAMEBUFFER, 0) ;
@@ -1460,7 +1766,7 @@ void romulus_render( romulus_render_stage stage ) {
     glUseProgram(0) ;
     glDrawElements(GL_TRIANGLES, 0, GL_UNSIGNED_INT, 0) ;
     
-    romulus_report_error( stage->render_buffer->scene, "romulus_render1") ;
+    romulus_report_error( stage->render_buffer->scene, "romulus_render1" ) ;
 }
 
 static void romulus_present_attributes_binder( romulus_shader shader ) {
@@ -1476,10 +1782,10 @@ static void romulus_present_attributes_constructor( int vertex_count, RKArgs arg
     
     romulus_construct_attribute(0, RKArgs_GetNextArg(args, GLfloat*), romulus_float_type_id, 3, vertex_count, romulus_false) ;
     
-    romulus_construct_attribute(1, RKArgs_GetNextArg(args, GLfloat*), romulus_float_type_id, 2, vertex_count, romulus_true) ;
+    romulus_construct_attribute(1, RKArgs_GetNextArg(args, GLfloat*), romulus_float_type_id, 2, vertex_count, romulus_false) ;
 }
 
-void romulus_present( romulus_render_stage stage ) {
+void romulus_present( romulus_render_buffer render_buffer ) {
     
     static int init = 0 ;
     
@@ -1506,7 +1812,7 @@ void romulus_present( romulus_render_stage stage ) {
     
     static romulus_shader shader = NULL ;
     
-    romulus_set_active_scene(stage->render_buffer->scene) ;
+    romulus_set_active_scene(render_buffer->scene) ;
     
     glBindFramebuffer(GL_FRAMEBUFFER, 0) ;
     
@@ -1520,18 +1826,18 @@ void romulus_present( romulus_render_stage stage ) {
     
     if ( !init ) {
         
-        mesh = romulus_new_mesh(stage->render_buffer->scene, romulus_present_attributes_constructor, newargs( args(GLfloat*,quad_pos_array,quad_texcoord_array) ),
+        mesh = romulus_new_mesh(render_buffer->scene, romulus_present_attributes_constructor, newargs( args(GLfloat*,quad_pos_array,quad_texcoord_array) ),
                                                                                                                        romulus_present_attributes_binder, 4, quad_elementArray_array, 6) ;
-        shader = romulus_new_shader(stage->render_buffer->scene, vertex_shader0, fragment_shader0, romulus_present_attributes_binder) ;
+        shader = romulus_new_shader(render_buffer->scene, vertex_shader0, fragment_shader0, romulus_present_attributes_binder) ;
         
         init++ ;
     }
     
     glUseProgram(shader->pid) ;
     
-    glViewport(0, 0, stage->render_buffer->scene->width, stage->render_buffer->scene->height) ;
+    glViewport(0, 0, render_buffer->scene->width, render_buffer->scene->height) ;
     
-    romulus_load_render_buffer_as_texture_to_shader(stage->render_buffer, "romulus_texture_0", 0, shader) ;
+    romulus_load_render_buffer_as_texture_to_shader(render_buffer, "romulus_texture_0", 0, shader) ;
     
     glBindVertexArray(mesh->vao) ;
     
@@ -1539,7 +1845,7 @@ void romulus_present( romulus_render_stage stage ) {
     
     glDrawElements(GL_TRIANGLES, mesh->index_count, GL_UNSIGNED_INT, 0) ;
     
-    romulus_report_error( stage->render_buffer->scene, "romulus_present") ;
+    romulus_report_error( render_buffer->scene, "romulus_present" ) ;
 }
 
 void romulus_run_loop( romulus_scene scene, romulus_run_loop_func_type run_loop_func, RKArgs run_args, romulus_run_quit_loop_func_type run_quit_loop_func, RKArgs quit_args ) {
