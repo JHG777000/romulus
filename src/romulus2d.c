@@ -2,7 +2,7 @@
 //  romulus2d.c
 //  romulus
 /*
- Copyright (c) 2017 Jacob Gordon. All rights reserved.
+ Copyright (c) 2017-2018 Jacob Gordon. All rights reserved.
  
  Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
  
@@ -23,7 +23,8 @@
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_STATIC
 #define STBI_ONLY_PNG
-#include <stb_image.h>
+#define STBI_NO_GIF
+#include <romulus/stb_image.h>
 
 static const char* vertex_shader2d =
 "#version 330\n"
@@ -114,6 +115,20 @@ static int nothing( void ) {
     ptr =  nothing2(stbi__sse2_available) ;
     
     ptr =  nothing2(stbi__at_eof) ;
+    
+    ptr = nothing2(stbi_load_16_from_memory) ;
+    
+    ptr = nothing2(stbi_load_16_from_callbacks) ;
+    
+    ptr = nothing2(stbi_is_16_bit_from_memory) ;
+    
+    ptr = nothing2(stbi_is_16_bit_from_callbacks) ;
+    
+    ptr = nothing2(stbi_is_16_bit) ;
+    
+    ptr = nothing2(stbi__vertical_flip_slices) ;
+    
+    ptr = nothing2(stbi__float_postprocess) ;
     
     return (int)(nothing2(stbi_load_16)) ;
 }

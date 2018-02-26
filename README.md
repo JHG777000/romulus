@@ -6,14 +6,14 @@ romulus is a work in progress cross-platform opengl based rendering library writ
 
 See main.c for example.
 
+Uses:
+
+-STB Image https://github.com/nothings/stb/blob/master/stb_image.h
+
 Dependencies: 
 
  -RKLib https://github.com/JHG777000/RKLib
  
  -IDK https://github.com/JHG777000/IDK
-
- -STB Image https://github.com/nothings/stb/blob/master/stb_image.h
-
- -GLAD https://github.com/Dav1dde/glad
 
  -GLFW http://www.glfw.org
