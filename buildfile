@@ -1,7 +1,7 @@
 
 project := "romulus_project".
 
-project_version := "1.0.1".
+project_version := "1.0.2".
 
 buildfile_version := "1.0".
 
@@ -68,7 +68,7 @@ build romulus_build.
 
   files romulus_test_files("main.c").
 
-  sources romulus_test_source(romulus_test_files,romulus,IDK,libglfw3,RKLib).
+  sources romulus_test_source(romulus_test_files,RKLib,libglfw3,IDK,romulus).
 
   output romulus_test("application",romulus_test_source,romulus_tool_chain).
 
