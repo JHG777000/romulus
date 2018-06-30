@@ -614,6 +614,7 @@ static GLenum romulus_get_gl_type(romulus_data_type data_type) {
             break;
     }
     
+    return GL_UNSIGNED_BYTE ;
 }
 
 static GLsizei romulus_get_gl_type_size(GLenum type){

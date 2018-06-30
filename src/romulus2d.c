@@ -409,6 +409,8 @@ int romulus2d_get_texture_format_size( romulus2d_texture texture ) {
         default:
             break;
     }
+    
+    return 0 ;
 }
 
 romulus2d_texture_format romulus2d_get_texture_format( romulus2d_texture texture ) {
