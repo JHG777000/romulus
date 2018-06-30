@@ -1,7 +1,7 @@
 
 project := "romulus_project".
 
-project_version := "1.0".
+project_version := "1.0.1".
 
 buildfile_version := "1.0".
 
@@ -86,7 +86,7 @@ end build.
 
 build clean_build.
 
- url URLFoIDK("https://raw.githubusercontent.com/JHG777000/IDK/master/buildfile").
+ url URLForIDK("https://raw.githubusercontent.com/JHG777000/IDK/master/buildfile").
 
  subproject IDKProject("local",URLForIDK,"-b clean_build").
 
