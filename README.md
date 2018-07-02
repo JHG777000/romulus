@@ -12,6 +12,8 @@ Uses:
 
  -RKLib https://github.com/JHG777000/RKLib
  
+ -Nuklear https://github.com/vurtun/nuklear 
+
  -IDK https://github.com/JHG777000/IDK
 
  -GLFW http://www.glfw.org
