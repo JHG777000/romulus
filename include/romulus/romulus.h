@@ -71,6 +71,8 @@ typedef IDKWindowRunLoopFuncType romulus_run_loop_func_type ;
 
 typedef IDKWindowQuitRunLoopFuncType romulus_run_quit_loop_func_type ;
 
+typedef IDKNuklearCallBackFuncType romulus_nuklear_callback_func_type ;
+
 void romulus_report_error( romulus_scene scene, const char* report_name ) ;
 
 romulus_app romulus_new_app( RKString app_name, float version, romulus_bool logging ) ;
@@ -259,6 +261,8 @@ void romulus_set_render_stage_projection_matrix( romulus_render_stage stage, RKM
 void romulus_render( romulus_render_stage stage ) ;
 
 void romulus_present( romulus_render_buffer render_buffer ) ;
+
+void romulus_set_nuklear_callback( romulus_window window, romulus_nuklear_callback_func_type nuklear_callback, RKArgs args ) ;
 
 void romulus_run_loop( romulus_scene scene, romulus_run_loop_func_type run_loop_func, RKArgs run_args, romulus_run_quit_loop_func_type run_quit_loop_func, RKArgs quit_args ) ;
 

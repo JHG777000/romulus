@@ -1522,9 +1522,13 @@ static void romulus_new_framebuffer( romulus_render_buffer render_buffer ) {
     
     render_buffer->fbuf_tex = fbuf_tex ;
     
+    float red, green, blue, alpha ;
+    
+    IDK_GetWindowBackGroundColor(render_buffer->scene->display_window->idk_window, &red, &green, &blue, &alpha) ;
+    
     //clear the framebuffer?
     glBindFramebuffer(GL_FRAMEBUFFER, fbuf) ;
-    glClearColor(0.5f, 0.5f, 0.5f, 1.0f) ;
+    glClearColor(red, green, blue, alpha) ;
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT) ;
     glUseProgram(0) ;
     glDrawElements(GL_TRIANGLES, 0, GL_UNSIGNED_INT, 0) ;
@@ -1670,7 +1674,11 @@ void romulus_render( romulus_render_stage stage ) {
         glDisable(GL_BLEND) ;
     }
     
-    glClearColor(0.5f, 0.5f, 0.5f, 1.0f) ;
+    float red, green, blue, alpha ;
+    
+    IDK_GetWindowBackGroundColor(stage->render_buffer->scene->display_window->idk_window, &red, &green, &blue, &alpha) ;
+    
+    glClearColor(red, green, blue, alpha) ;
     
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT) ;
     
@@ -1760,9 +1768,11 @@ void romulus_render( romulus_render_stage stage ) {
     
     romulus_report_error( stage->render_buffer->scene, "romulus_render0" ) ;
     
+    IDK_GetWindowBackGroundColor(stage->render_buffer->scene->display_window->idk_window, &red, &green, &blue, &alpha) ;
+    
     //clear the framebuffer?
     glBindFramebuffer(GL_FRAMEBUFFER, 0) ;
-    glClearColor(0.5f, 0.5f, 0.5f, 1.0f) ;
+    glClearColor(red, green, blue, alpha) ;
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT) ;
     glUseProgram(0) ;
     glDrawElements(GL_TRIANGLES, 0, GL_UNSIGNED_INT, 0) ;
@@ -1815,13 +1825,17 @@ void romulus_present( romulus_render_buffer render_buffer ) {
     
     romulus_set_active_scene(render_buffer->scene) ;
     
+    float red, green, blue, alpha ;
+    
+    IDK_GetWindowBackGroundColor(render_buffer->scene->display_window->idk_window, &red, &green, &blue, &alpha) ;
+    
     glBindFramebuffer(GL_FRAMEBUFFER, 0) ;
     
     glEnable(GL_DEPTH_TEST) ;
     
     glEnable(GL_CULL_FACE) ;
     
-    glClearColor(0.5f, 0.5f, 0.5f, 1.0f) ;
+    glClearColor(red, green, blue, alpha) ;
     
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT) ;
     
@@ -1847,6 +1861,11 @@ void romulus_present( romulus_render_buffer render_buffer ) {
     glDrawElements(GL_TRIANGLES, mesh->index_count, GL_UNSIGNED_INT, 0) ;
     
     romulus_report_error( render_buffer->scene, "romulus_present" ) ;
+}
+
+void romulus_set_nuklear_callback( romulus_window window, romulus_nuklear_callback_func_type nuklear_callback, RKArgs args ) {
+    
+    IDK_SetNuklearCallBack(window->idk_window, nuklear_callback, args) ;
 }
 
 void romulus_run_loop( romulus_scene scene, romulus_run_loop_func_type run_loop_func, RKArgs run_args, romulus_run_quit_loop_func_type run_quit_loop_func, RKArgs quit_args ) {

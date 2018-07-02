@@ -1,7 +1,7 @@
 
 project := "romulus_project".
 
-project_version := "1.0.2".
+project_version := "1.0.3".
 
 buildfile_version := "1.0".
 
