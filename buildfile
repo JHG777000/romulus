@@ -1,7 +1,7 @@
 
 project := "romulus_project".
 
-project_version := "1.0.3".
+project_version := "1.0.4".
 
 buildfile_version := "1.0".
 
@@ -21,7 +21,13 @@ build romulus_build.
 
  get toolchain_select.
 
- if ( toolchain_select == nil ).
+ if ( toolchain_select == nil && is_mac ).
+
+  var toolchain_select := "clang".
+
+ end if.
+
+ if ( toolchain_select == nil && !is_mac ).
 
   var toolchain_select := "gcc".
 
