@@ -1,11 +1,11 @@
 
 project := "romulus_project".
 
-project_version := "1.0.5".
+project_version := "1.0.6".
 
 buildfile_version := "1.0".
 
-url_to_src := "https://github.com/JHG777000/romulus/archive/master.zip".
+url_to_src := "https://github.com/JHG777000/romulus/archive/main.zip".
 
 build romulus_build.
 
@@ -33,7 +33,7 @@ build romulus_build.
 
  end if.
 
- url URLForIDK("https://raw.githubusercontent.com/JHG777000/IDK/master/buildfile").
+ url URLForIDK("https://raw.githubusercontent.com/JHG777000/IDK/main/buildfile").
 
  subproject IDKProject("local",URLForIDK,nil).
 
@@ -92,7 +92,7 @@ end build.
 
 build clean_build.
 
- url URLForIDK("https://raw.githubusercontent.com/JHG777000/IDK/master/buildfile").
+ url URLForIDK("https://raw.githubusercontent.com/JHG777000/IDK/main/buildfile").
 
  subproject IDKProject("local",URLForIDK,"-b clean_build").
 

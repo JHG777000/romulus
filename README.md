@@ -27,8 +27,8 @@ romulus uses [builder][1] for its build system.
 To download and build use this command:
 
 
-	builder -u https://raw.githubusercontent.com/JHG777000/romulus/master/buildfile
+	builder -u https://raw.githubusercontent.com/JHG777000/romulus/main/buildfile
 	
 To run test, add -i __t:
 
-	builder -i __t -u https://raw.githubusercontent.com/JHG777000/romulus/master/buildfile
+	builder -i __t -u https://raw.githubusercontent.com/JHG777000/romulus/main/buildfile
